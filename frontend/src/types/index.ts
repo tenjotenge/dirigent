@@ -4,7 +4,8 @@ export type WorkflowStatus =
   | "waiting_provider"
   | "evaluating_policy"
   | "executing_tool"
-  | "completed";
+  | "completed"
+  | "generating_long";  // Long-running generation in progress
 
 export type ExecutionEventType =
   | "provider_request"
@@ -93,7 +94,9 @@ export type AppView = "main" | "settings";
 export type StartupPhase =
   | "initializing"
   | "starting_backend"
+  | "waiting_backend"
   | "checking_health"
+  | "connecting_lmstudio"
   | "loading_models"
   | "restoring_workspace"
   | "ready"
@@ -103,4 +106,13 @@ export interface GenerateResponse {
   response: string;
   tool_results?: ToolCallResult[] | null;
   policy_decision?: PolicyDecision | null;
+  validation_errors?: string[] | null;
+  metadata?: {
+    model?: string;
+    provider?: string;
+    generation_time_seconds?: number;
+    generation_state?: string;
+    parse_method?: string;
+    raw_output_length?: number;
+  };
 }

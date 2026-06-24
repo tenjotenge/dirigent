@@ -9,8 +9,11 @@ The policy engine evaluates tool calls and determines:
 
 This ensures safe and controlled tool execution across all providers.
 """
+import logging
 from typing import List, Dict, Set
 from backend.core.tool_protocol import ToolCall, ToolCallBatch, PolicyDecision
+
+logger = logging.getLogger(__name__)
 
 
 class PolicyEngine:
@@ -88,6 +91,18 @@ class PolicyEngine:
         Returns:
             Dictionary with allowed, requires_confirmation, and reason keys
         """
+        # Rule 0: Check confidence - if low, require confirmation
+        if call.confidence is not None and call.confidence < 0.5:
+            logger.warning(
+                f"Low confidence tool call flagged by policy: {call.tool_name} "
+                f"(confidence={call.confidence})"
+            )
+            return {
+                "allowed": True,
+                "requires_confirmation": True,
+                "reason": f"Low confidence tool call (confidence={call.confidence})",
+            }
+        
         # Rule 1: Tool must be registered
         if call.tool_name not in self.registered_tools:
             return {

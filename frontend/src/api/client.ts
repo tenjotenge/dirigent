@@ -55,6 +55,7 @@ export interface SettingsResponse {
   api_url: string;
   repo_path: string;
   development_mode: boolean;
+  recent_repos: string[];
 }
 
 export interface ConnectionTestResponse {

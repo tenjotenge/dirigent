@@ -4,6 +4,7 @@ Unified tool calling protocol for Dirigent.
 Defines provider-agnostic schemas for tool execution across all AI providers.
 This ensures Claude, ChatGPT, Codex, and Devin can all express actions uniformly.
 """
+import uuid
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 from enum import Enum
@@ -25,9 +26,14 @@ class ToolCall:
     """
     tool_name: str
     args: Dict[str, Any]
-    call_id: str
+    call_id: Optional[str] = None
     requires_confirmation: bool = False
+    confidence: Optional[float] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self):
+        if self.call_id is None:
+            self.call_id = str(uuid.uuid4())
 
 
 @dataclass
@@ -40,6 +46,7 @@ class ToolCallBatch:
     calls: List[ToolCall]
     execution_mode: ExecutionMode = ExecutionMode.SEQUENTIAL
     source_provider: str = "unknown"
+    metadata: Dict[str, Any] = field(default_factory=dict)
     
     def __len__(self) -> int:
         return len(self.calls)

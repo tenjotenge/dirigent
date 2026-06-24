@@ -9,10 +9,12 @@ import {
   gitStatus,
   setApiBase,
   setWorkspace,
+  testLmStudioConnection,
   type SettingsResponse,
 } from "./api/client";
 import { CenterPanel } from "./components/CenterPanel";
 import { ConfirmationModal } from "./components/ConfirmationModal";
+import { LmStudioPanel } from "./components/LmStudioPanel";
 import { LeftSidebar } from "./components/LeftSidebar";
 import { RightSidebar } from "./components/RightSidebar";
 import { SettingsView } from "./components/SettingsView";
@@ -67,6 +69,7 @@ function App() {
   const [preferences, setPreferences] = useState<UserPreferences>(loadPreferences);
   const [appSettings, setAppSettings] = useState<SettingsResponse | null>(null);
   const [backendDiagnostics, setBackendDiagnostics] = useState("");
+  const [showLmStudioPanel, setShowLmStudioPanel] = useState(false);
 
   const [backendStatus, setBackendStatus] = useState<BackendStatus>({
     backendOnline: false,
@@ -185,7 +188,7 @@ function App() {
     async function startup() {
       try {
         setStartupPhase("starting_backend");
-        setStartupMessage("Checking backend…");
+        setStartupMessage("Starting backend process…");
 
         const backend = await ensureBackendRunning();
         if (cancelled) return;
@@ -212,6 +215,11 @@ function App() {
           apiUrl: backend.apiUrl,
         }));
 
+        setStartupPhase("waiting_backend");
+        setStartupMessage("Waiting for backend to respond…");
+        await new Promise((r) => setTimeout(r, 500));
+        if (cancelled) return;
+
         setStartupPhase("checking_health");
         setStartupMessage("Verifying backend health…");
         const health = await fetchHealth();
@@ -222,10 +230,10 @@ function App() {
           durationMs: 0,
         });
 
-        setStartupPhase("loading_models");
-        setStartupMessage("Loading models from LM Studio…");
-
+        setStartupPhase("connecting_lmstudio");
+        setStartupMessage("Connecting to LM Studio…");
         const settings = await fetchSettings();
+        if (cancelled) return;
         setAppSettings(settings);
 
         setBackendStatus({
@@ -237,6 +245,9 @@ function App() {
           apiUrl: health.api_url,
           backendManaged: backend.managed,
         });
+
+        setStartupPhase("loading_models");
+        setStartupMessage("Loading models from LM Studio…");
 
         await loadModels();
         if (cancelled) return;
@@ -368,15 +379,54 @@ function App() {
       details: userMessage,
     });
 
+    // Watchdog timer for long-running generation
+    // Log reminders at: 1min, 2min, 3min, 5min, then every 5min thereafter
+    const loggedMilestones = new Set<number>();
+    const WATCHDOG_MILESTONES = [
+      60, 120, 180, 300,
+      ...Array.from({ length: 100 }, (_, i) => 300 + (i + 1) * 5 * 60),
+    ];
+
+    const watchdogInterval = setInterval(() => {
+      const elapsed = Math.round((performance.now() - start) / 1000);
+      if (workflowStatus !== "completed") {
+        for (const milestone of WATCHDOG_MILESTONES) {
+          if (elapsed >= milestone && !loggedMilestones.has(milestone)) {
+            loggedMilestones.add(milestone);
+            const minutes = Math.floor(milestone / 60);
+            addLog("info", `Generation still in progress... (${minutes} min elapsed)`);
+            break;
+          }
+        }
+      }
+    }, 5000); // Check every 5 seconds for timely milestone logging
+
     try {
       setWorkflowStatus("waiting_provider");
+      
+      // Set a timeout to update status to "generating_long" after 30 seconds
+      const longGenerationTimeout = setTimeout(() => {
+        if (workflowStatus === "waiting_provider") {
+          setWorkflowStatus("generating_long");
+          addLog("info", "Model is generating (this may take a while for large models)", {
+            provider: "lmstudio",
+            details: "Long-running generation detected",
+          });
+        }
+      }, 30000);
+
       const data = await generate({ model: selectedModel, prompt: userMessage });
+      
+      clearTimeout(longGenerationTimeout);
       const providerDuration = Math.round(performance.now() - start);
 
       addLog("provider_response", `Received response from ${selectedModel}`, {
         provider: "lmstudio",
         success: true,
         durationMs: providerDuration,
+        details: data.metadata?.generation_time_seconds
+          ? `Generation time: ${data.metadata.generation_time_seconds}s`
+          : undefined,
       });
 
       if (data.policy_decision) {
@@ -430,6 +480,7 @@ function App() {
         durationMs: Math.round(performance.now() - start),
       });
     } finally {
+      clearInterval(watchdogInterval);
       setTimeout(() => setWorkflowStatus("idle"), 800);
     }
   };
@@ -650,6 +701,7 @@ function App() {
         onClearConversation={handleClearConversation}
         onOpenRepository={() => openRepository()}
         onOpenSettings={() => setCurrentView("settings")}
+        onOpenLmStudioPanel={() => setShowLmStudioPanel(true)}
         isBusy={workflowStatus !== "idle"}
         isRefreshingModels={isRefreshingModels}
         isOpeningRepo={isOpeningRepo}
@@ -666,6 +718,8 @@ function App() {
         repoLoaded={backendStatus.repoLoaded}
         onOpenRepository={() => openRepository()}
         isOpeningRepo={isOpeningRepo}
+        recentRepos={recentRepos}
+        onSelectRecentRepo={(path) => openRepository(path)}
       />
 
       <RightSidebar logs={logs} onClear={clearLogs} />
@@ -678,8 +732,38 @@ function App() {
           isExecuting={isConfirming}
         />
       )}
+
+      {showLmStudioPanel && (
+        <LmStudioPanel
+          settings={appSettings}
+          providerAvailable={backendStatus.providerAvailable}
+          onRefreshModels={loadModels}
+          onTestConnection={async () => {
+            try {
+              const result = await testLmStudioConnection();
+              addLog("info", `LM Studio connection test: ${result.message}`, {
+                success: result.success,
+              });
+            } catch (error) {
+              addLog("error", "LM Studio connection test failed", {
+                details: error instanceof Error ? error.message : String(error),
+                success: false,
+              });
+            }
+          }}
+          onClose={() => setShowLmStudioPanel(false)}
+        />
+      )}
     </div>
   );
 }
 
 export default App;
+
+</parameter>
+<task_progress>
+- [x] Create unified one-click launcher (run_dirigent.ps1)
+- [x] Reapply frontend watchdog milestone-based schedule
+- [ ] Verify changes
+</task_progress>
+</write_to_file>

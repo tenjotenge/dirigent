@@ -34,6 +34,10 @@ interface CenterPanelProps {
 
   isOpeningRepo: boolean;
 
+  recentRepos?: string[];
+
+  onSelectRecentRepo?: (path: string) => void;
+
 }
 
 
@@ -60,6 +64,10 @@ export function CenterPanel({
 
   isOpeningRepo,
 
+  recentRepos,
+
+  onSelectRecentRepo,
+
 }: CenterPanelProps) {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -85,6 +93,10 @@ export function CenterPanel({
           onOpenRepository={onOpenRepository}
 
           isOpening={isOpeningRepo}
+
+          recentRepos={recentRepos}
+
+          onSelectRecentRepo={onSelectRecentRepo}
 
         />
 

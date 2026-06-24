@@ -24,6 +24,8 @@ interface LeftSidebarProps {
 
   onOpenSettings: () => void;
 
+  onOpenLmStudioPanel: () => void;
+
   isBusy: boolean;
 
   isRefreshingModels: boolean;
@@ -67,6 +69,8 @@ export function LeftSidebar({
   onOpenRepository,
 
   onOpenSettings,
+
+  onOpenLmStudioPanel,
 
   isBusy,
 
@@ -162,11 +166,16 @@ export function LeftSidebar({
 
             <span className="status-label">LM Studio</span>
 
-            <span className={`status-pill ${status.providerAvailable ? "online" : "offline"}`}>
+            <button
+              className={`status-pill ${status.providerAvailable ? "online" : "offline"}`}
+              onClick={onOpenLmStudioPanel}
+              type="button"
+              title="Open LM Studio Control Panel"
+            >
 
               {status.providerAvailable ? "Reachable" : "Unreachable"}
 
-            </span>
+            </button>
 
           </div>
 

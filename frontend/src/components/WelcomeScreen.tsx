@@ -1,9 +1,16 @@
 interface WelcomeScreenProps {
   onOpenRepository: () => void;
   isOpening: boolean;
+  recentRepos?: string[];
+  onSelectRecentRepo?: (path: string) => void;
 }
 
-export function WelcomeScreen({ onOpenRepository, isOpening }: WelcomeScreenProps) {
+export function WelcomeScreen({ 
+  onOpenRepository, 
+  isOpening,
+  recentRepos = [],
+  onSelectRecentRepo
+}: WelcomeScreenProps) {
   return (
     <div className="welcome-screen">
       <div className="welcome-content">
@@ -37,6 +44,26 @@ export function WelcomeScreen({ onOpenRepository, isOpening }: WelcomeScreenProp
             </div>
           </div>
         </div>
+
+        {recentRepos.length > 0 && (
+          <div className="welcome-recent">
+            <span className="welcome-label">Recent repositories</span>
+            <div className="welcome-recent-list">
+              {recentRepos.slice(0, 5).map((repo) => (
+                <button
+                  key={repo}
+                  className="btn-ghost welcome-recent-item"
+                  onClick={() => onSelectRecentRepo?.(repo)}
+                  disabled={isOpening}
+                  type="button"
+                  title={repo}
+                >
+                  {repo}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <button
           className="btn-primary btn-lg"

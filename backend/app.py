@@ -1,6 +1,7 @@
 """
 Dirigent backend API - FastAPI application.
 """
+import logging
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -15,6 +16,13 @@ from backend.tools.registry import ToolRegistry, register_tool
 from backend.tools.filesystem import ReadFileTool, WriteFileTool
 from backend.tools.git import GitStatusTool, GitAddTool, GitCommitTool, GitPushTool
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
+
 
 app = FastAPI(title="Dirigent API", version="0.1.0")
 
@@ -26,17 +34,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize provider
-provider = LMStudioProvider()
+# Initialize tool registry using global registry
+from backend.tools.registry import get_registry
+tool_registry = get_registry()
 
-# Initialize tool registry and register tools
-tool_registry = ToolRegistry()
-register_tool(ReadFileTool())
-register_tool(WriteFileTool())
-register_tool(GitStatusTool())
-register_tool(GitAddTool())
-register_tool(GitCommitTool())
-register_tool(GitPushTool())
+# Register tools
+tool_registry.register(ReadFileTool())
+tool_registry.register(WriteFileTool())
+tool_registry.register(GitStatusTool())
+tool_registry.register(GitAddTool())
+tool_registry.register(GitCommitTool())
+tool_registry.register(GitPushTool())
+
+# Get registered tool names for provider parsing
+registered_tool_names = list(tool_registry.list_names())
+logger.info(f"Registered tools: {registered_tool_names}")
+
+# Initialize provider with registered tools for parsing
+provider = LMStudioProvider(registered_tools=registered_tool_names)
 
 # Initialize execution engine with tool registry
 engine = ExecutionEngine(provider=provider, tool_registry=tool_registry)
@@ -73,6 +88,7 @@ class SettingsResponse(BaseModel):
     api_url: str
     repo_path: str
     development_mode: bool
+    recent_repos: List[str]
 
 
 class UpdateSettingsRequest(BaseModel):
@@ -103,6 +119,7 @@ class GenerateResponse(BaseModel):
     response: str
     tool_results: Optional[List[Dict[str, Any]]] = None
     policy_decision: Optional[Dict[str, Any]] = None
+    validation_errors: Optional[List[str]] = None
 
 
 class ReadFileRequest(BaseModel):
@@ -221,12 +238,18 @@ async def set_workspace(request: SetWorkspaceRequest):
         raise HTTPException(status_code=400, detail=f"Path is not a directory: {path}")
     settings.repo_path = str(path)
     settings.persist()
+    
+    # Add to recent repositories
+    from backend.settings_store import settings_store
+    settings_store.add_recent_repo(str(path))
+    
     return _workspace_info()
 
 
 @app.get("/settings", response_model=SettingsResponse)
 async def get_settings():
     """Return current application settings."""
+    from backend.settings_store import settings_store
     return SettingsResponse(
         lmstudio_host=settings.lmstudio_host,
         lmstudio_port=settings.lmstudio_port,
@@ -236,6 +259,7 @@ async def get_settings():
         api_url=settings.api_url,
         repo_path=settings.repo_path or "",
         development_mode=is_development(),
+        recent_repos=settings_store.get_recent_repos(),
     )
 
 
@@ -300,8 +324,10 @@ async def generate(request: GenerateRequest):
             response=result["content"],
             tool_results=result.get("tool_results"),
             policy_decision=result.get("policy_decision"),
+            validation_errors=result.get("validation_errors"),
         )
     except Exception as e:
+        logger.error(f"Generate endpoint error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

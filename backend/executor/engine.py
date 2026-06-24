@@ -3,11 +3,15 @@ Execution engine for Dirigent.
 
 Central orchestrator that coordinates providers and tools.
 """
+import logging
 from typing import Dict, Any, List, Optional
 from backend.core.interfaces import BaseProvider, BaseTool, ProviderResponse, ToolResult
 from backend.core.tool_protocol import ToolCallBatch, ToolCallResult, PolicyDecision
+from backend.core.tool_parser import ParseResult
 from backend.tools.registry import ToolRegistry
 from backend.executor.policy import PolicyEngine
+
+logger = logging.getLogger(__name__)
 
 
 class ExecutionEngine:
@@ -31,6 +35,7 @@ class ExecutionEngine:
         self.provider = provider
         self.tool_registry = tool_registry
         self.policy_engine = PolicyEngine(tool_registry.list_names())
+        self.parser = None  # Will be set if provider has parser
     
     def execute(
         self,
@@ -40,6 +45,14 @@ class ExecutionEngine:
     ) -> Dict[str, Any]:
         """
         Execute a user request through the provider and handle any tool calls.
+        
+        This is the deterministic execution flow:
+        1. Provider response
+        2. Parse tool calls (if any)
+        3. Validate tool calls
+        4. Policy decision
+        5. Execute allowed calls
+        6. Return results
         
         Args:
             prompt: The user's input prompt
@@ -53,28 +66,63 @@ class ExecutionEngine:
             - policy_decision: Policy evaluation results
             - metadata: Provider metadata
         """
-        # Step 1: Call provider
+        # Step 1: Call provider (returns normalized ProviderResponse)
         provider_response = self.provider.send(prompt, model, **kwargs)
         
-        # Step 2: Normalize tool calls
+        # Log provider response
+        logger.info(
+            f"Provider response: model={model}, "
+            f"content_length={len(provider_response.content)}, "
+            f"has_tool_calls={provider_response.tool_calls is not None}"
+        )
+        
+        # Step 2: Get tool calls (already parsed by provider)
         tool_call_batch = provider_response.tool_calls
         
-        # Step 3: Policy evaluation
+        # Step 3: Validate tool calls (execution gate)
+        validation_errors = []
+        if tool_call_batch:
+            validation_errors = self._validate_tool_calls(tool_call_batch)
+            
+            if validation_errors:
+                # Log validation failures
+                for error in validation_errors:
+                    logger.warning(f"Tool call validation failed: {error}")
+                
+                # Return response with validation errors - do NOT execute
+                return {
+                    "content": provider_response.content,
+                    "tool_results": [],
+                    "policy_decision": None,
+                    "validation_errors": validation_errors,
+                    "metadata": provider_response.metadata,
+                }
+        
+        # Step 4: Policy evaluation
         policy_decision = None
         tool_call_results = []
         
-        if tool_call_batch and tool_call_batch:
+        if tool_call_batch and len(tool_call_batch) > 0:
+            logger.info(f"Evaluating {len(tool_call_batch)} tool calls against policy")
             policy_decision = self.policy_engine.evaluate(tool_call_batch)
             
-            # Step 4: Execute auto-approved calls; defer confirmation-required calls
+            # Log policy decision
+            logger.info(
+                f"Policy decision: allowed={len(policy_decision.allowed_calls)}, "
+                f"blocked={len(policy_decision.blocked_calls)}, "
+                f"requires_confirmation={policy_decision.requires_user_confirmation}"
+            )
+            
+            # Step 5: Execute auto-approved calls; defer confirmation-required calls
             auto_calls = [
                 call for call in policy_decision.allowed_calls
                 if not call.requires_confirmation
             ]
             if auto_calls:
+                logger.info(f"Executing {len(auto_calls)} auto-approved tool calls")
                 tool_call_results = self._execute_tool_calls(auto_calls)
         
-        # Step 5: Return unified response with policy decisions
+        # Step 6: Return unified response with policy decisions
         return {
             "content": provider_response.content,
             "tool_results": self._serialize_tool_results(tool_call_results),
@@ -96,7 +144,10 @@ class ExecutionEngine:
         Returns:
             ToolResult from the tool execution
         """
+        logger.info(f"Direct tool execution: {tool_name}")
+        
         if not self.tool_registry.has(tool_name):
+            logger.warning(f"Tool not found: {tool_name}")
             return ToolResult(
                 success=False,
                 stderr=f"Tool not found: {tool_name}",
@@ -104,6 +155,57 @@ class ExecutionEngine:
         
         tool = self.tool_registry.get(tool_name)
         return tool.run(args)
+    
+    def _validate_tool_calls(self, tool_call_batch: ToolCallBatch) -> List[str]:
+        """
+        Validate all tool calls in a batch before execution.
+        
+        This is the execution gate that ensures only valid, safe tool calls
+        are passed to the execution layer.
+        
+        Args:
+            tool_call_batch: The batch of tool calls to validate
+            
+        Returns:
+            List of validation error messages (empty if all valid)
+        """
+        errors = []
+        
+        for call in tool_call_batch.calls:
+            # Validation 1: Tool must exist in registry
+            if not self.tool_registry.has(call.tool_name):
+                errors.append(
+                    f"Tool '{call.tool_name}' is not registered (call_id: {call.call_id})"
+                )
+                continue
+            
+            # Validation 2: Tool call must not be malformed
+            if not call.tool_name or not isinstance(call.args, dict):
+                errors.append(
+                    f"Malformed tool call: missing tool_name or invalid args (call_id: {call.call_id})"
+                )
+                continue
+            
+            # Validation 3: Arguments must be JSON-serializable (basic check)
+            try:
+                import json
+                json.dumps(call.args)
+            except (TypeError, ValueError) as e:
+                errors.append(
+                    f"Tool arguments are not JSON-serializable: {e} (call_id: {call.call_id})"
+                )
+                continue
+            
+            # Validation 4: Check confidence - if low, flag for confirmation
+            if call.confidence is not None and call.confidence < 0.5:
+                logger.warning(
+                    f"Low confidence tool call: {call.tool_name} "
+                    f"(confidence={call.confidence}, call_id: {call.call_id})"
+                )
+                # Mark for confirmation - policy engine will handle this
+                call.requires_confirmation = True
+        
+        return errors
     
     def _execute_tool_calls(self, tool_calls: List) -> List[ToolCallResult]:
         """
@@ -118,7 +220,17 @@ class ExecutionEngine:
         results = []
         
         for tool_call in tool_calls:
+            logger.info(f"Executing tool: {tool_call.tool_name} (call_id: {tool_call.call_id})")
             tool_result = self._execute_single_tool(tool_call)
+            
+            # Log execution result
+            if tool_result.success:
+                logger.info(f"Tool execution succeeded: {tool_call.tool_name}")
+            else:
+                logger.error(
+                    f"Tool execution failed: {tool_call.tool_name}, "
+                    f"error={tool_result.stderr}"
+                )
             
             results.append(ToolCallResult(
                 call_id=tool_call.call_id,
@@ -144,6 +256,7 @@ class ExecutionEngine:
         tool_name = tool_call.tool_name
         
         if not self.tool_registry.has(tool_name):
+            logger.error(f"Tool not found during execution: {tool_name}")
             return ToolResult(
                 success=False,
                 stderr=f"Tool not found: {tool_name}",
