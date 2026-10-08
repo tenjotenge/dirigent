@@ -11,6 +11,7 @@ from typing import List, Optional, Dict, Any
 from backend.config import settings
 from backend.paths import is_development
 from backend.openai_auth import OpenAIAuthError, chatgpt_auth
+from backend.provider_credentials import ProviderCredentialError, provider_credentials
 from backend.providers.lmstudio import LMStudioProvider
 from backend.executor.engine import ExecutionEngine
 from backend.tools.registry import ToolRegistry, register_tool
@@ -114,6 +115,19 @@ class ChatGPTAuthResponse(BaseModel):
     message: Optional[str] = None
     connected: List[Dict[str, Any]] = []
     authorization_url: Optional[str] = None
+
+
+class ProviderCredentialRequest(BaseModel):
+    secret: str
+
+
+class ProviderCredentialStatus(BaseModel):
+    id: str
+    label: str
+    credential_label: str
+    env_var: str
+    hint: str
+    connected: bool
 
 
 class GenerateRequest(BaseModel):
@@ -331,6 +345,35 @@ async def start_chatgpt_auth():
         return ChatGPTAuthResponse(**chatgpt_auth.start())
     except OpenAIAuthError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.get("/auth/providers", response_model=List[ProviderCredentialStatus])
+async def get_provider_credential_status():
+    """List supported key/PAT connectors without exposing credential material."""
+    return [ProviderCredentialStatus(**provider) for provider in provider_credentials.status()]
+
+
+@app.put("/auth/providers/{provider}", response_model=ProviderCredentialStatus)
+async def save_provider_credential(provider: str, request: ProviderCredentialRequest):
+    """Store a provider credential in owner-only local backend storage."""
+    try:
+        provider_credentials.save(provider, request.secret)
+    except ProviderCredentialError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return next(
+        ProviderCredentialStatus(**entry)
+        for entry in provider_credentials.status()
+        if entry["id"] == provider
+    )
+
+
+@app.delete("/auth/providers/{provider}", status_code=204)
+async def delete_provider_credential(provider: str):
+    """Remove a locally stored provider credential without revoking it remotely."""
+    try:
+        provider_credentials.delete(provider)
+    except ProviderCredentialError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.post("/generate", response_model=GenerateResponse)

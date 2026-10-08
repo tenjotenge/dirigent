@@ -70,6 +70,15 @@ export interface ChatGPTAuthResponse {
   connected: Array<{ id: string; email?: string | null; plan_enabled: boolean }>;
 }
 
+export interface ProviderCredentialStatus {
+  id: "claude" | "cursor" | "devin";
+  label: string;
+  credential_label: string;
+  env_var: string;
+  hint: string;
+  connected: boolean;
+}
+
 export async function fetchHealth(): Promise<HealthResponse> {
   return request<HealthResponse>("/health");
 }
@@ -117,6 +126,27 @@ export async function startChatGPTAuth(): Promise<ChatGPTAuthResponse> {
   return request<ChatGPTAuthResponse>("/auth/chatgpt/start", {
     method: "POST",
   });
+}
+
+export async function fetchProviderCredentialStatus(): Promise<ProviderCredentialStatus[]> {
+  return request<ProviderCredentialStatus[]>("/auth/providers");
+}
+
+export async function saveProviderCredential(
+  provider: ProviderCredentialStatus["id"],
+  secret: string,
+): Promise<ProviderCredentialStatus> {
+  return request<ProviderCredentialStatus>(`/auth/providers/${provider}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ secret }),
+  });
+}
+
+export async function deleteProviderCredential(
+  provider: ProviderCredentialStatus["id"],
+): Promise<void> {
+  await request<unknown>(`/auth/providers/${provider}`, { method: "DELETE" });
 }
 
 export async function fetchModels(): Promise<string[]> {

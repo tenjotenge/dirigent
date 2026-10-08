@@ -3,9 +3,13 @@ import type { BackendStatus } from "../types";
 import {
   testLmStudioConnection,
   fetchChatGPTAuthStatus,
+  fetchProviderCredentialStatus,
+  saveProviderCredential,
+  deleteProviderCredential,
   startChatGPTAuth,
   updateSettings,
   type ChatGPTAuthResponse,
+  type ProviderCredentialStatus,
   type SettingsResponse,
 } from "../api/client";
 import type { UserPreferences } from "../services/storage";
@@ -42,9 +46,13 @@ export function SettingsView({
   const [isSaving, setIsSaving] = useState(false);
   const [chatgptAuth, setChatgptAuth] = useState<ChatGPTAuthResponse | null>(null);
   const [isConnectingChatGPT, setIsConnectingChatGPT] = useState(false);
+  const [providerCredentials, setProviderCredentials] = useState<ProviderCredentialStatus[]>([]);
+  const [providerSecrets, setProviderSecrets] = useState<Record<string, string>>({});
+  const [providerResult, setProviderResult] = useState<string | null>(null);
 
   useEffect(() => {
     fetchChatGPTAuthStatus().then(setChatgptAuth).catch(() => undefined);
+    fetchProviderCredentialStatus().then(setProviderCredentials).catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -97,6 +105,29 @@ export function SettingsView({
       });
     } finally {
       setIsConnectingChatGPT(false);
+    }
+  };
+
+  const handleSaveProvider = async (provider: ProviderCredentialStatus) => {
+    const secret = providerSecrets[provider.id] ?? "";
+    if (!secret.trim()) return;
+    try {
+      const updated = await saveProviderCredential(provider.id, secret);
+      setProviderCredentials((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setProviderSecrets((current) => ({ ...current, [provider.id]: "" }));
+      setProviderResult(`${provider.label} credential saved locally.`);
+    } catch (error) {
+      setProviderResult(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const handleDisconnectProvider = async (provider: ProviderCredentialStatus) => {
+    try {
+      await deleteProviderCredential(provider.id);
+      setProviderCredentials((current) => current.map((item) => item.id === provider.id ? { ...item, connected: false } : item));
+      setProviderResult(`${provider.label} credential removed locally.`);
+    } catch (error) {
+      setProviderResult(error instanceof Error ? error.message : String(error));
     }
   };
 
@@ -181,6 +212,41 @@ export function SettingsView({
           {chatgptAuth?.status === "failed" && (
             <p className="settings-result">{chatgptAuth.message}</p>
           )}
+        </section>
+
+        <section className="settings-section">
+          <h3>Other provider connections</h3>
+          <p className="settings-hint">
+            These providers currently expose API-key or personal-token integration,
+            not a transferable browser-account sign-in for Dirigent.
+          </p>
+          {providerCredentials.map((provider) => (
+            <div className="confirm-detail" key={provider.id}>
+              <div className="confirm-value">
+                <strong>{provider.label}</strong>
+                <p className="settings-hint">{provider.hint}</p>
+                <input
+                  className="settings-input"
+                  type="password"
+                  autoComplete="off"
+                  placeholder={provider.connected ? "Replace stored credential" : provider.credential_label}
+                  value={providerSecrets[provider.id] ?? ""}
+                  onChange={(event) => setProviderSecrets((current) => ({ ...current, [provider.id]: event.target.value }))}
+                />
+                <div className="settings-actions">
+                  <button className="btn-secondary" onClick={() => handleSaveProvider(provider)} type="button">
+                    {provider.connected ? "Replace" : "Save credential"}
+                  </button>
+                  {provider.connected && (
+                    <button className="btn-secondary" onClick={() => handleDisconnectProvider(provider)} type="button">
+                      Disconnect
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+          {providerResult && <p className="settings-result">{providerResult}</p>}
         </section>
 
         <section className="settings-section">
