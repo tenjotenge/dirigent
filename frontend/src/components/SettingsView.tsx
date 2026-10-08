@@ -1,8 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { BackendStatus } from "../types";
 import {
   testLmStudioConnection,
+  fetchChatGPTAuthStatus,
+  startChatGPTAuth,
   updateSettings,
+  type ChatGPTAuthResponse,
   type SettingsResponse,
 } from "../api/client";
 import type { UserPreferences } from "../services/storage";
@@ -37,6 +40,20 @@ export function SettingsView({
   const [testResult, setTestResult] = useState<string | null>(null);
   const [isTesting, setIsTesting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [chatgptAuth, setChatgptAuth] = useState<ChatGPTAuthResponse | null>(null);
+  const [isConnectingChatGPT, setIsConnectingChatGPT] = useState(false);
+
+  useEffect(() => {
+    fetchChatGPTAuthStatus().then(setChatgptAuth).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    if (chatgptAuth?.status !== "pending") return;
+    const timer = window.setInterval(() => {
+      fetchChatGPTAuthStatus().then(setChatgptAuth).catch(() => undefined);
+    }, 1500);
+    return () => window.clearInterval(timer);
+  }, [chatgptAuth?.status]);
 
   const handleSaveLmStudio = async () => {
     setIsSaving(true);
@@ -65,6 +82,21 @@ export function SettingsView({
       setTestResult(error instanceof Error ? error.message : String(error));
     } finally {
       setIsTesting(false);
+    }
+  };
+
+  const handleConnectChatGPT = async () => {
+    setIsConnectingChatGPT(true);
+    try {
+      setChatgptAuth(await startChatGPTAuth());
+    } catch (error) {
+      setChatgptAuth({
+        status: "failed",
+        message: error instanceof Error ? error.message : String(error),
+        connected: [],
+      });
+    } finally {
+      setIsConnectingChatGPT(false);
     }
   };
 
@@ -118,6 +150,37 @@ export function SettingsView({
             </button>
           </div>
           {testResult && <p className="settings-result">{testResult}</p>}
+        </section>
+
+        <section className="settings-section">
+          <h3>ChatGPT</h3>
+          <p className="settings-hint">
+            Connect a ChatGPT account to authorize eligible plan-backed requests.
+            Dirigent keeps credentials in protected local backend storage; they are
+            never sent to the frontend.
+          </p>
+          <div className="settings-actions">
+            <button
+              className="btn-secondary"
+              onClick={handleConnectChatGPT}
+              disabled={isConnectingChatGPT || chatgptAuth?.status === "pending"}
+              type="button"
+            >
+              {chatgptAuth?.status === "pending"
+                ? "Waiting for browser approval…"
+                : isConnectingChatGPT
+                  ? "Opening browser…"
+                  : "Continue with ChatGPT"}
+            </button>
+          </div>
+          {chatgptAuth?.status === "connected" && (
+            <p className="settings-result">
+              Connected: {chatgptAuth.connected.map((account) => account.email || "ChatGPT account").join(", ")}
+            </p>
+          )}
+          {chatgptAuth?.status === "failed" && (
+            <p className="settings-result">{chatgptAuth.message}</p>
+          )}
         </section>
 
         <section className="settings-section">

@@ -64,6 +64,12 @@ export interface ConnectionTestResponse {
   models_count: number;
 }
 
+export interface ChatGPTAuthResponse {
+  status: "idle" | "pending" | "connected" | "failed";
+  message?: string | null;
+  connected: Array<{ id: string; email?: string | null; plan_enabled: boolean }>;
+}
+
 export async function fetchHealth(): Promise<HealthResponse> {
   return request<HealthResponse>("/health");
 }
@@ -99,6 +105,16 @@ export async function updateSettings(updates: {
 
 export async function testLmStudioConnection(): Promise<ConnectionTestResponse> {
   return request<ConnectionTestResponse>("/settings/test-lmstudio", {
+    method: "POST",
+  });
+}
+
+export async function fetchChatGPTAuthStatus(): Promise<ChatGPTAuthResponse> {
+  return request<ChatGPTAuthResponse>("/auth/chatgpt");
+}
+
+export async function startChatGPTAuth(): Promise<ChatGPTAuthResponse> {
+  return request<ChatGPTAuthResponse>("/auth/chatgpt/start", {
     method: "POST",
   });
 }

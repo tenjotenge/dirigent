@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from backend.config import settings
 from backend.paths import is_development
+from backend.openai_auth import OpenAIAuthError, chatgpt_auth
 from backend.providers.lmstudio import LMStudioProvider
 from backend.executor.engine import ExecutionEngine
 from backend.tools.registry import ToolRegistry, register_tool
@@ -106,6 +107,13 @@ class ConnectionTestResponse(BaseModel):
 
 class ModelsResponse(BaseModel):
     models: List[str]
+
+
+class ChatGPTAuthResponse(BaseModel):
+    status: str
+    message: Optional[str] = None
+    connected: List[Dict[str, Any]] = []
+    authorization_url: Optional[str] = None
 
 
 class GenerateRequest(BaseModel):
@@ -308,6 +316,21 @@ async def list_models():
     """List available LM Studio models."""
     models = engine.list_models()
     return ModelsResponse(models=models)
+
+
+@app.get("/auth/chatgpt", response_model=ChatGPTAuthResponse)
+async def get_chatgpt_auth_status():
+    """Return safe local ChatGPT connection state; never returns tokens."""
+    return ChatGPTAuthResponse(**chatgpt_auth.status())
+
+
+@app.post("/auth/chatgpt/start", response_model=ChatGPTAuthResponse)
+async def start_chatgpt_auth():
+    """Open the browser for a user-initiated Sign in with ChatGPT flow."""
+    try:
+        return ChatGPTAuthResponse(**chatgpt_auth.start())
+    except OpenAIAuthError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @app.post("/generate", response_model=GenerateResponse)
