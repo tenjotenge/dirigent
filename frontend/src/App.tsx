@@ -382,37 +382,31 @@ function App() {
     // Watchdog timer for long-running generation
     // Log reminders at: 1min, 2min, 3min, 5min, then every 5min thereafter
     const loggedMilestones = new Set<number>();
-    const WATCHDOG_MILESTONES = [
-      60, 120, 180, 300,
-      ...Array.from({ length: 100 }, (_, i) => 300 + (i + 1) * 5 * 60),
-    ];
+    const WATCHDOG_INITIAL_MILESTONES = [60, 120, 180];
 
     const watchdogInterval = setInterval(() => {
       const elapsed = Math.round((performance.now() - start) / 1000);
-      if (workflowStatus !== "completed") {
-        for (const milestone of WATCHDOG_MILESTONES) {
-          if (elapsed >= milestone && !loggedMilestones.has(milestone)) {
-            loggedMilestones.add(milestone);
-            const minutes = Math.floor(milestone / 60);
-            addLog("info", `Generation still in progress... (${minutes} min elapsed)`);
-            break;
-          }
-        }
+      const milestone =
+        elapsed >= 300
+          ? Math.floor(elapsed / 300) * 300
+          : [...WATCHDOG_INITIAL_MILESTONES]
+              .reverse()
+              .find((time) => elapsed >= time);
+
+      if (milestone && !loggedMilestones.has(milestone)) {
+        loggedMilestones.add(milestone);
+        const minutes = Math.floor(milestone / 60);
+        addLog("info", `Generation still in progress... (${minutes} min elapsed)`);
       }
     }, 5000); // Check every 5 seconds for timely milestone logging
 
     try {
       setWorkflowStatus("waiting_provider");
       
-      // Set a timeout to update status to "generating_long" after 30 seconds
+      // Keep the active UI state accurate after 30 seconds without adding a
+      // pre-milestone log entry; reminders begin at one minute.
       const longGenerationTimeout = setTimeout(() => {
-        if (workflowStatus === "waiting_provider") {
-          setWorkflowStatus("generating_long");
-          addLog("info", "Model is generating (this may take a while for large models)", {
-            provider: "lmstudio",
-            details: "Long-running generation detected",
-          });
-        }
+        setWorkflowStatus("generating_long");
       }, 30000);
 
       const data = await generate({ model: selectedModel, prompt: userMessage });
@@ -759,11 +753,3 @@ function App() {
 }
 
 export default App;
-
-</parameter>
-<task_progress>
-- [x] Create unified one-click launcher (run_dirigent.ps1)
-- [x] Reapply frontend watchdog milestone-based schedule
-- [ ] Verify changes
-</task_progress>
-</write_to_file>

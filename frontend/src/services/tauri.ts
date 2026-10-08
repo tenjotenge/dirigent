@@ -1,5 +1,12 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 
+interface TauriBackendStatus {
+  running: boolean;
+  managed: boolean;
+  message: string;
+  apiUrl: string;
+}
+
 export async function ensureBackendRunning(): Promise<TauriBackendStatus> {
   if (!isTauri()) {
     return {

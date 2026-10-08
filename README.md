@@ -63,8 +63,8 @@ dirigent/
 
 1. Create a virtual environment:
 ```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 ```
 
 2. Install backend dependencies:
@@ -81,6 +81,19 @@ npm install
 ```
 
 ## Running the Application
+
+### Windows one-click launcher
+
+After completing the backend and frontend setup, run `run_dirigent.bat` from
+Explorer or a command prompt. It resolves the project root, validates `.venv`,
+starts (or reuses) the backend, waits for `/health`, writes backend output to
+`logs/backend.log`, and then launches the desktop frontend.
+
+For a backend-only session, use:
+
+```powershell
+.\run_dirigent.ps1 -BackendOnly
+```
 
 ### Start the Backend
 

@@ -9,7 +9,9 @@ interface StartupSplashProps {
 const PHASE_LABELS: Record<StartupPhase, string> = {
   initializing: "Initializing…",
   starting_backend: "Starting backend…",
+  waiting_backend: "Waiting for backend…",
   checking_health: "Checking backend health…",
+  connecting_lmstudio: "Connecting to LM Studio…",
   loading_models: "Loading models…",
   restoring_workspace: "Restoring workspace…",
   ready: "Ready",
