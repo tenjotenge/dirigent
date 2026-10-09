@@ -6,13 +6,14 @@ import time
 from pathlib import Path
 from uuid import UUID
 
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, Header, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from backend.config import settings
 from backend.paths import is_development
 from backend.archive import archive
+from backend.archive_parquet import MAX_FILE_BYTES, export_encrypted_parquet, import_encrypted_parquet
 from backend.openai_auth import OpenAIAuthError, chatgpt_auth
 from backend.provider_credentials import ProviderCredentialError, provider_credentials
 from backend.providers.lmstudio import LMStudioProvider
@@ -174,6 +175,10 @@ class ArchiveActionRequest(BaseModel):
     error: Optional[str] = None
     duration_ms: int = 0
     tool_results: List[Dict[str, Any]] = []
+
+
+class ArchivePassphraseRequest(BaseModel):
+    passphrase: str
 
 
 class ReadFileRequest(BaseModel):
@@ -478,11 +483,28 @@ async def get_archived_conversation(conversation_id: str):
     return result
 
 
-@app.get("/archive/export.json")
-async def export_archive_json():
-    import json
-    payload = json.dumps(archive.export_json(), ensure_ascii=False, indent=2)
-    return Response(payload, media_type="application/json", headers={"Content-Disposition": "attachment; filename=dirigent-archive.json"})
+@app.post("/archive/export.dpa")
+async def export_archive_parquet(request: ArchivePassphraseRequest):
+    try:
+        payload = export_encrypted_parquet(archive, request.passphrase)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return Response(payload, media_type="application/octet-stream", headers={
+        "Content-Disposition": "attachment; filename=dirigent-archive.dpa",
+        "Cache-Control": "no-store",
+    })
+
+
+@app.post("/archive/import.dpa")
+async def import_archive_parquet(request: Request, x_archive_passphrase: str = Header(...)):
+    length = request.headers.get("content-length")
+    if length and length.isdecimal() and int(length) > MAX_FILE_BYTES:
+        raise HTTPException(status_code=413, detail="Archive exceeds the 128 MB import limit")
+    data = await request.body()
+    try:
+        return import_encrypted_parquet(archive, data, x_archive_passphrase)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/archive/import")
@@ -491,14 +513,6 @@ async def import_archive_json(payload: Dict[str, Any]):
         return archive.import_json(payload)
     except (ValueError, TypeError, KeyError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.get("/archive/conversations/{conversation_id}/export.md")
-async def export_conversation_markdown(conversation_id: str):
-    markdown = archive.export_markdown(conversation_id)
-    if markdown is None:
-        raise HTTPException(status_code=404, detail="Conversation not found")
-    return Response(markdown, media_type="text/markdown", headers={"Content-Disposition": f"attachment; filename=dirigent-{conversation_id}.md"})
 
 
 @app.post("/tools/filesystem/read", response_model=ReadFileResponse)

@@ -137,6 +137,24 @@ Backend settings can be configured via environment variables or a `.env` file:
 ### Generation
 - `POST /generate` - Generate text using a selected model
 
+### Conversation archive
+
+Conversations and run metadata are kept in a local SQLite database under the
+platform-specific Dirigent application-data directory. The Archive screen can
+search and reopen conversations, and consolidate archives from other installs.
+Each saved run includes the provider and model; reasoning effort is included
+when the provider reports it.
+
+Portable exports are encrypted `.dpa` files containing Parquet data. Enter a
+passphrase of at least 12 characters and confirm it before export. Import on
+another installation with the same passphrase. Imports merge by stable IDs and
+can be repeated without duplicating records. The passphrase is not stored, so
+losing it makes the export unrecoverable. Do not confuse Parquet's binary format
+with encryption: the `.dpa` wrapper provides the confidentiality and integrity.
+Exports are currently limited to 128 MB. The older plaintext JSON import API
+remains available for migration, but plaintext JSON and Markdown export routes
+are no longer exposed.
+
 ### Filesystem Tools
 - `POST /tools/filesystem/read` - Read a file
 - `POST /tools/filesystem/write` - Write content to a file

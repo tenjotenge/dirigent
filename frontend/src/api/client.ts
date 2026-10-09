@@ -238,15 +238,35 @@ export async function archiveLocalAction(params: {
   });
 }
 
-export async function downloadArchive(path: string, filename: string): Promise<void> {
-  const response = await fetch(`${apiBase}${path}`);
-  if (!response.ok) throw new Error(`Export failed (${response.status})`);
+export async function exportEncryptedArchive(passphrase: string): Promise<void> {
+  const response = await fetch(`${apiBase}/archive/export.dpa`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ passphrase }),
+  });
+  if (!response.ok) {
+    const body = await response.json();
+    throw new Error(body.detail ?? `Export failed (${response.status})`);
+  }
   const url = URL.createObjectURL(await response.blob());
   const link = document.createElement("a");
   link.href = url;
-  link.download = filename;
+  link.download = "dirigent-archive.dpa";
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+export async function importEncryptedArchive(file: File, passphrase: string): Promise<{conversations: number; messages: number; runs: number}> {
+  const response = await fetch(`${apiBase}/archive/import.dpa`, {
+    method: "POST",
+    headers: { "Content-Type": "application/octet-stream", "X-Archive-Passphrase": passphrase },
+    body: file,
+  });
+  if (!response.ok) {
+    const body = await response.json();
+    throw new Error(body.detail ?? `Import failed (${response.status})`);
+  }
+  return response.json();
 }
 
 export async function readFile(filePath: string): Promise<{

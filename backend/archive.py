@@ -160,11 +160,14 @@ class ConversationArchive:
 
     def get_conversation(self, conversation_id: str) -> dict[str, Any] | None:
         with self._connect() as connection:
-            conversation = connection.execute("SELECT * FROM conversations WHERE id=?", (conversation_id,)).fetchone()
-            if conversation is None:
-                return None
-            messages = connection.execute("SELECT * FROM messages WHERE conversation_id=? ORDER BY created_at, rowid", (conversation_id,)).fetchall()
-            runs = connection.execute("SELECT * FROM runs WHERE conversation_id=? ORDER BY started_at, rowid", (conversation_id,)).fetchall()
+            return self._get_conversation(connection, conversation_id)
+
+    def _get_conversation(self, connection: sqlite3.Connection, conversation_id: str) -> dict[str, Any] | None:
+        conversation = connection.execute("SELECT * FROM conversations WHERE id=?", (conversation_id,)).fetchone()
+        if conversation is None:
+            return None
+        messages = connection.execute("SELECT * FROM messages WHERE conversation_id=? ORDER BY created_at, rowid", (conversation_id,)).fetchall()
+        runs = connection.execute("SELECT * FROM runs WHERE conversation_id=? ORDER BY started_at, rowid", (conversation_id,)).fetchall()
         result = dict(conversation)
         result["messages"] = [self._decode_row(row) for row in messages]
         result["runs"] = [self._decode_row(row) for row in runs]
@@ -180,9 +183,13 @@ class ConversationArchive:
 
     def export_json(self) -> dict[str, Any]:
         with self._connect() as connection:
+            # Hold a read snapshot so another agent cannot change half of an
+            # export while it is being assembled.
+            connection.execute("BEGIN")
             ids = [row[0] for row in connection.execute("SELECT id FROM conversations ORDER BY created_at")]
+            conversations = [self._get_conversation(connection, item) for item in ids]
         return {"format": "dirigent-conversation-archive", "version": SCHEMA_VERSION,
-                "exported_at": now_utc(), "conversations": [self.get_conversation(item) for item in ids]}
+                "exported_at": now_utc(), "conversations": conversations}
 
     def import_json(self, payload: dict[str, Any]) -> dict[str, int]:
         if payload.get("format") != "dirigent-conversation-archive" or payload.get("version") != SCHEMA_VERSION:

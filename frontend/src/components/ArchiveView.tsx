@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { downloadArchive, fetchArchiveSummaries, importArchive, type ArchiveSummary } from "../api/client";
+import { exportEncryptedArchive, fetchArchiveSummaries, importEncryptedArchive, type ArchiveSummary } from "../api/client";
 
 interface ArchiveViewProps {
   onBack: () => void;
@@ -12,6 +12,9 @@ export function ArchiveView({ onBack, onOpen }: ArchiveViewProps) {
   const [offset, setOffset] = useState(0);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [exportPassphrase, setExportPassphrase] = useState("");
+  const [confirmPassphrase, setConfirmPassphrase] = useState("");
+  const [importPassphrase, setImportPassphrase] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -24,10 +27,16 @@ export function ArchiveView({ onBack, onOpen }: ArchiveViewProps) {
   }, [search, offset]);
 
   const exportAll = async () => {
+    if (exportPassphrase.length < 12 || exportPassphrase !== confirmPassphrase) {
+      setMessage("Use a passphrase of at least 12 characters and confirm it exactly.");
+      return;
+    }
     setBusy(true);
     try {
-      await downloadArchive("/archive/export.json", "dirigent-archive.json");
-      setMessage("Archive exported. Store this file securely; it contains full conversation text.");
+      await exportEncryptedArchive(exportPassphrase);
+      setExportPassphrase("");
+      setConfirmPassphrase("");
+      setMessage("Encrypted archive exported. Keep the passphrase safe; it cannot be recovered.");
     } catch (error) {
       setMessage(String(error));
     } finally {
@@ -37,9 +46,14 @@ export function ArchiveView({ onBack, onOpen }: ArchiveViewProps) {
 
   const importFile = async (file: File | undefined) => {
     if (!file) return;
+    if (!importPassphrase) {
+      setMessage("Enter the archive passphrase before selecting a file.");
+      return;
+    }
     setBusy(true);
     try {
-      const result = await importArchive(JSON.parse(await file.text()));
+      const result = await importEncryptedArchive(file, importPassphrase);
+      setImportPassphrase("");
       setMessage(`Imported ${result.conversations} conversations, ${result.messages} messages, and ${result.runs} runs. Existing IDs were skipped.`);
       setItems(await fetchArchiveSummaries(search, offset));
     } catch (error) {
@@ -57,13 +71,20 @@ export function ArchiveView({ onBack, onOpen }: ArchiveViewProps) {
       </header>
       <div className="settings-body">
         <section className="settings-section">
-          <p className="settings-hint">Search saved conversations, resume one, or consolidate archives from other Dirigent installations.</p>
+          <p className="settings-hint">Search saved conversations, resume one, or consolidate encrypted archives from other Dirigent installations. Exports use Parquet inside a passphrase-protected Dirigent file; the passphrase is not stored and cannot be recovered.</p>
           <input className="settings-input" aria-label="Search conversations" placeholder="Search conversations" value={search} onChange={(event) => { setSearch(event.target.value); setOffset(0); }} />
+          <h3>Export all conversations</h3>
+          <input className="settings-input" aria-label="Export passphrase" type="password" autoComplete="new-password" placeholder="Passphrase (at least 12 characters)" value={exportPassphrase} onChange={(event) => setExportPassphrase(event.target.value)} />
+          <input className="settings-input" aria-label="Confirm export passphrase" type="password" autoComplete="new-password" placeholder="Confirm passphrase" value={confirmPassphrase} onChange={(event) => setConfirmPassphrase(event.target.value)} />
           <div className="settings-actions">
-            <button className="btn-secondary" onClick={exportAll} disabled={busy} type="button">Export all as JSON</button>
+            <button className="btn-secondary" onClick={exportAll} disabled={busy} type="button">Export encrypted Parquet</button>
+          </div>
+          <h3>Import an encrypted archive</h3>
+          <input className="settings-input" aria-label="Import passphrase" type="password" autoComplete="off" placeholder="Archive passphrase" value={importPassphrase} onChange={(event) => setImportPassphrase(event.target.value)} />
+          <div className="settings-actions">
             <label className="btn-secondary">
-              Import JSON
-              <input type="file" accept="application/json,.json" hidden disabled={busy} onChange={(event) => { void importFile(event.target.files?.[0]); event.target.value = ""; }} />
+              Import encrypted archive
+              <input type="file" accept=".dpa,application/octet-stream" hidden disabled={busy} onChange={(event) => { void importFile(event.target.files?.[0]); event.target.value = ""; }} />
             </label>
           </div>
           {message && <p className="settings-result">{message}</p>}
@@ -78,7 +99,6 @@ export function ArchiveView({ onBack, onOpen }: ArchiveViewProps) {
                 <p className="settings-hint">{new Date(item.updated_at).toLocaleString()} · {item.run_count} run{item.run_count === 1 ? "" : "s"} · {item.last_provider || "unknown provider"} · {item.last_model || "unknown model"} · effort: {item.last_effort || "unknown"}</p>
                 <div className="settings-actions">
                   <button className="btn-secondary" type="button" onClick={() => void onOpen(item.id).catch((error) => setMessage(String(error)))}>Open</button>
-                  <button className="btn-secondary" type="button" onClick={() => void downloadArchive(`/archive/conversations/${encodeURIComponent(item.id)}/export.md`, `dirigent-${item.id}.md`).catch((error) => setMessage(String(error)))}>Export Markdown</button>
                 </div>
               </div>
             </div>
