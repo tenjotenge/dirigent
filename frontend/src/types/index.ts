@@ -70,6 +70,9 @@ export interface ChatMessage {
   toolResults?: ToolCallResult[];
   policyDecision?: PolicyDecision;
   error?: string;
+  provider?: string;
+  model?: string;
+  effort?: string | null;
 }
 
 export interface PendingAction {
@@ -89,7 +92,7 @@ export interface BackendStatus {
   backendManaged: boolean;
 }
 
-export type AppView = "main" | "settings";
+export type AppView = "main" | "settings" | "archive";
 
 export type StartupPhase =
   | "initializing"
@@ -104,6 +107,8 @@ export type StartupPhase =
 
 export interface GenerateResponse {
   response: string;
+  conversation_id: string;
+  run_id: string;
   tool_results?: ToolCallResult[] | null;
   policy_decision?: PolicyDecision | null;
   validation_errors?: string[] | null;
@@ -114,5 +119,6 @@ export interface GenerateResponse {
     generation_state?: string;
     parse_method?: string;
     raw_output_length?: number;
+    reasoning_effort?: string;
   };
 }

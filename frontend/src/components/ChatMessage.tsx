@@ -16,6 +16,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
     <div className={`chat-message ${message.role}`}>
       <div className="chat-message-header">
         <span className="chat-message-role">{isUser ? "You" : "Assistant"}</span>
+        {message.provider && <span className="chat-message-time">{message.provider} · {message.model || "unknown model"}{message.effort ? ` · ${message.effort}` : ""}</span>}
         <span className="chat-message-time">{formatTimestamp(message.timestamp)}</span>
       </div>
 

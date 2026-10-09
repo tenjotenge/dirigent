@@ -2,10 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import "./App.css";
 import {
   executeConfirmedTool,
+  archiveLocalAction,
   fetchHealth,
   fetchModels,
   fetchSettings,
   generate,
+  fetchArchivedConversation,
   gitStatus,
   setApiBase,
   setWorkspace,
@@ -13,6 +15,7 @@ import {
   type SettingsResponse,
 } from "./api/client";
 import { CenterPanel } from "./components/CenterPanel";
+import { ArchiveView } from "./components/ArchiveView";
 import { ConfirmationModal } from "./components/ConfirmationModal";
 import { LmStudioPanel } from "./components/LmStudioPanel";
 import { LeftSidebar } from "./components/LeftSidebar";
@@ -60,6 +63,7 @@ function App() {
   const [selectedProvider, setSelectedProvider] = useState<"lmstudio" | "chatgpt">("lmstudio");
   const [selectedModel, setSelectedModel] = useState(loadSelectedModel);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const [chatInput, setChatInput] = useState("");
   const [workflowStatus, setWorkflowStatus] = useState<WorkflowStatus>("idle");
   const [isRefreshingModels, setIsRefreshingModels] = useState(false);
@@ -278,7 +282,11 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [addLog, loadModels]);
+  }, [addLog]);
+
+  useEffect(() => {
+    if (startupPhase === "ready") void loadModels();
+  }, [selectedProvider]);
 
   useEffect(() => {
     if (startupPhase !== "ready") return;
@@ -368,6 +376,8 @@ function App() {
     if (!chatInput.trim() || !selectedModel || !backendStatus.repoLoaded) return;
 
     const userMessage = chatInput.trim();
+    const activeConversationId = conversationId ?? crypto.randomUUID();
+    setConversationId(activeConversationId);
     setMessages((prev) => [
       ...prev,
       {
@@ -375,6 +385,8 @@ function App() {
         role: "user",
         content: userMessage,
         timestamp: new Date(),
+        provider: selectedProvider,
+        model: selectedModel,
       },
     ]);
     setChatInput("");
@@ -382,7 +394,7 @@ function App() {
     const start = performance.now();
     setWorkflowStatus("sending");
     addLog("provider_request", `Sending prompt to ${selectedModel}`, {
-      provider: "lmstudio",
+      provider: selectedProvider,
       details: userMessage,
     });
 
@@ -407,22 +419,21 @@ function App() {
       }
     }, 5000); // Check every 5 seconds for timely milestone logging
 
+    // Keep the active UI state accurate without adding a pre-milestone log entry.
+    const longGenerationTimeout = setTimeout(() => {
+      setWorkflowStatus("generating_long");
+    }, 30000);
+
     try {
       setWorkflowStatus("waiting_provider");
-      
-      // Keep the active UI state accurate after 30 seconds without adding a
-      // pre-milestone log entry; reminders begin at one minute.
-      const longGenerationTimeout = setTimeout(() => {
-        setWorkflowStatus("generating_long");
-      }, 30000);
 
-      const data = await generate({ provider: selectedProvider, model: selectedModel, prompt: userMessage });
+      const data = await generate({ provider: selectedProvider, model: selectedModel, prompt: userMessage, conversation_id: activeConversationId });
+      setConversationId(data.conversation_id);
       
-      clearTimeout(longGenerationTimeout);
       const providerDuration = Math.round(performance.now() - start);
 
       addLog("provider_response", `Received response from ${selectedModel}`, {
-        provider: "lmstudio",
+        provider: selectedProvider,
         success: true,
         durationMs: providerDuration,
         details: data.metadata?.generation_time_seconds
@@ -453,12 +464,15 @@ function App() {
           timestamp: new Date(),
           toolResults: data.tool_results ?? undefined,
           policyDecision: data.policy_decision ?? undefined,
+          provider: data.metadata?.provider ?? selectedProvider,
+          model: data.metadata?.model ?? selectedModel,
+          effort: data.metadata?.reasoning_effort,
         },
       ]);
 
       setWorkflowStatus("completed");
       addLog("success", "Request completed", {
-        provider: "lmstudio",
+        provider: selectedProvider,
         success: true,
         durationMs: Math.round(performance.now() - start),
       });
@@ -472,16 +486,19 @@ function App() {
           content: "",
           timestamp: new Date(),
           error: message,
+          provider: selectedProvider,
+          model: selectedModel,
         },
       ]);
       addLog("error", "Generation failed", {
-        provider: "lmstudio",
+        provider: selectedProvider,
         details: message,
         success: false,
         durationMs: Math.round(performance.now() - start),
       });
     } finally {
       clearInterval(watchdogInterval);
+      clearTimeout(longGenerationTimeout);
       setTimeout(() => setWorkflowStatus("idle"), 800);
     }
   };
@@ -494,14 +511,31 @@ function App() {
     try {
       const data = await gitStatus();
       const output = data.stdout || data.stderr || data.error || "No output";
+      const responseText = `\`\`\`\n${output}\n\`\`\``;
+      const localConversationId = conversationId ?? crypto.randomUUID();
+      setConversationId(localConversationId);
+      try {
+        await archiveLocalAction({
+        conversation_id: localConversationId,
+        prompt: "Git status",
+        response: responseText,
+        error: data.success ? undefined : data.error,
+        duration_ms: Math.round(performance.now() - start),
+        tool_results: [{ tool_name: "git_status", success: data.success, stdout: data.stdout, stderr: data.stderr }],
+        });
+      } catch (archiveError) {
+        addLog("error", "Could not archive Git status", { details: String(archiveError) });
+      }
 
       setMessages((prev) => [
         ...prev,
         {
           id: nextMessageId(),
           role: "assistant",
-          content: `\`\`\`\n${output}\n\`\`\``,
+          content: responseText,
           timestamp: new Date(),
+          provider: "dirigent",
+          model: "local-tool",
           toolResults: [
             {
               call_id: nextMessageId(),
@@ -543,7 +577,31 @@ function App() {
 
   const handleClearConversation = () => {
     setMessages([]);
+    setConversationId(null);
     addLog("info", "Conversation cleared");
+  };
+
+  const handleOpenArchivedConversation = async (id: string) => {
+    const saved = await fetchArchivedConversation(id);
+    const runs = new Map(saved.runs.map((run) => [run.id, run]));
+    setConversationId(saved.id);
+    setMessages(saved.messages.map((message) => {
+      const run = message.run_id ? runs.get(message.run_id) : undefined;
+      return {
+        id: message.id,
+        role: message.role,
+        content: message.content,
+        timestamp: new Date(message.created_at),
+        provider: message.provider ?? undefined,
+        model: message.model ?? undefined,
+        effort: message.effort,
+        error: message.error ?? undefined,
+        toolResults: message.role === "assistant" ? run?.tool_results : undefined,
+        policyDecision: message.role === "assistant" ? run?.policy_decision ?? undefined : undefined,
+      };
+    }));
+    setPendingQueue([]);
+    setCurrentView("main");
   };
 
   const handleConfirmAction = async () => {
@@ -576,15 +634,33 @@ function App() {
         },
       };
 
+      const responseText = result.success
+        ? `Confirmed \`${action.tool_name}\` completed successfully.${files.length ? ` Affected: ${files.join(", ")}` : ""}`
+        : `Confirmed \`${action.tool_name}\` failed.`;
+      const localConversationId = conversationId ?? crypto.randomUUID();
+      setConversationId(localConversationId);
+      try {
+        await archiveLocalAction({
+        conversation_id: localConversationId,
+        prompt: `Confirm ${action.tool_name}`,
+        response: responseText,
+        error: result.success ? undefined : (result.error ?? result.stderr ?? "Unknown error"),
+        duration_ms: Math.round(performance.now() - start),
+        tool_results: [toolResult],
+        });
+      } catch (archiveError) {
+        addLog("error", "Could not archive confirmed action", { details: String(archiveError) });
+      }
+
       setMessages((prev) => [
         ...prev,
         {
           id: nextMessageId(),
           role: "assistant",
-          content: result.success
-            ? `Confirmed \`${action.tool_name}\` completed successfully.${files.length ? ` Affected: ${files.join(", ")}` : ""}`
-            : `Confirmed \`${action.tool_name}\` failed.`,
+          content: responseText,
           timestamp: new Date(),
+          provider: "dirigent",
+          model: "local-tool",
           toolResults: [toolResult],
           error: result.success ? undefined : (result.error ?? result.stderr ?? "Unknown error"),
         },
@@ -689,6 +765,10 @@ function App() {
     return <div className="app app-settings">{settingsContent}</div>;
   }
 
+  if (currentView === "archive") {
+    return <div className="app app-settings"><ArchiveView onBack={() => setCurrentView("main")} onOpen={handleOpenArchivedConversation} /></div>;
+  }
+
   return (
     <div className="app">
       <LeftSidebar
@@ -704,6 +784,7 @@ function App() {
         onClearConversation={handleClearConversation}
         onOpenRepository={() => openRepository()}
         onOpenSettings={() => setCurrentView("settings")}
+        onOpenArchive={() => setCurrentView("archive")}
         onOpenLmStudioPanel={() => setShowLmStudioPanel(true)}
         isBusy={workflowStatus !== "idle"}
         isRefreshingModels={isRefreshingModels}

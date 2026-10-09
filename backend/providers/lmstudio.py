@@ -161,7 +161,7 @@ class LMStudioProvider(BaseProvider):
             
             # Build metadata
             metadata = {
-                "model": model,
+                "model": data.get("model") or model,
                 "provider": "lmstudio",
                 "parse_method": parse_result.parse_method,
                 "parse_success": parse_result.parse_success,
@@ -169,6 +169,9 @@ class LMStudioProvider(BaseProvider):
                 "generation_time_seconds": round(total_elapsed, 2),
                 "generation_state": self.current_state.value,
             }
+
+            if isinstance(data.get("usage"), dict):
+                metadata["usage"] = data["usage"]
             
             if parse_result.error:
                 metadata["parse_error"] = parse_result.error

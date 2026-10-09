@@ -41,6 +41,7 @@ class ChatGPTProvider(BaseProvider):
             response.raise_for_status()
             text_parts: list[str] = []
             completed = False
+            completed_response: dict[str, Any] = {}
             for raw_line in response.iter_lines(decode_unicode=True):
                 if not raw_line or not raw_line.startswith("data: "):
                     continue
@@ -51,10 +52,22 @@ class ChatGPTProvider(BaseProvider):
                     raise RuntimeError(event.get("response", {}).get("error", {}).get("message", "ChatGPT request failed"))
                 elif event.get("type") == "response.completed":
                     completed = True
+                    completed_response = event.get("response") or {}
             if not completed:
                 raise RuntimeError("ChatGPT response ended before response.completed.")
             content = "".join(text_parts)
             parsed = parse_tool_calls(content, self.registered_tools)
-            return ProviderResponse(content=content, tool_calls=parsed.tool_calls, metadata={"model": model, "provider": "chatgpt", "generation_time_seconds": round(time.monotonic() - started, 2), "parse_method": parsed.parse_method})
+            metadata: dict[str, Any] = {
+                "model": completed_response.get("model") or model,
+                "provider": "chatgpt",
+                "generation_time_seconds": round(time.monotonic() - started, 2),
+                "parse_method": parsed.parse_method,
+            }
+            reasoning = completed_response.get("reasoning")
+            if isinstance(reasoning, dict) and reasoning.get("effort"):
+                metadata["reasoning_effort"] = reasoning["effort"]
+            if isinstance(completed_response.get("usage"), dict):
+                metadata["usage"] = completed_response["usage"]
+            return ProviderResponse(content=content, tool_calls=parsed.tool_calls, metadata=metadata)
         except (requests.RequestException, OpenAIAuthError, ValueError) as exc:
             raise RuntimeError(f"ChatGPT generation failed: {exc}") from exc

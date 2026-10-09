@@ -2,14 +2,17 @@
 Dirigent backend API - FastAPI application.
 """
 import logging
+import time
 from pathlib import Path
+from uuid import UUID
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from backend.config import settings
 from backend.paths import is_development
+from backend.archive import archive
 from backend.openai_auth import OpenAIAuthError, chatgpt_auth
 from backend.provider_credentials import ProviderCredentialError, provider_credentials
 from backend.providers.lmstudio import LMStudioProvider
@@ -31,7 +34,12 @@ app = FastAPI(title="Dirigent API", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:1420",
+        "http://127.0.0.1:1420",
+        "tauri://localhost",
+        "http://tauri.localhost",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -143,15 +151,29 @@ class GenerateRequest(BaseModel):
     provider: str = "lmstudio"
     model: str
     prompt: str
+    conversation_id: Optional[UUID] = None
+    effort: Optional[str] = None
     temperature: Optional[float] = 0.7
     max_tokens: Optional[int] = 2048
 
 
 class GenerateResponse(BaseModel):
     response: str
+    conversation_id: str
+    run_id: str
+    metadata: Dict[str, Any] = {}
     tool_results: Optional[List[Dict[str, Any]]] = None
     policy_decision: Optional[Dict[str, Any]] = None
     validation_errors: Optional[List[str]] = None
+
+
+class ArchiveActionRequest(BaseModel):
+    conversation_id: Optional[UUID] = None
+    prompt: str
+    response: str
+    error: Optional[str] = None
+    duration_ms: int = 0
+    tool_results: List[Dict[str, Any]] = []
 
 
 class ReadFileRequest(BaseModel):
@@ -389,22 +411,94 @@ async def delete_provider_credential(provider: str):
 @app.post("/generate", response_model=GenerateResponse)
 async def generate(request: GenerateRequest):
     """Generate text using a model."""
+    selected_engine = _engine_for(request.provider)
+    conversation_id, run_id = archive.begin_run(
+        conversation_id=str(request.conversation_id) if request.conversation_id else None,
+        prompt=request.prompt,
+        provider=request.provider,
+        model=request.model,
+        effort=None,
+    )
+    started = time.monotonic()
     try:
-        result = _engine_for(request.provider).execute(
+        result = selected_engine.execute(
             prompt=request.prompt,
             model=request.model,
             temperature=request.temperature,
             max_tokens=request.max_tokens,
         )
-        return GenerateResponse(
-            response=result["content"],
-            tool_results=result.get("tool_results"),
-            policy_decision=result.get("policy_decision"),
-            validation_errors=result.get("validation_errors"),
-        )
     except Exception as e:
+        archive.finish_run(
+            conversation_id=conversation_id, run_id=run_id,
+            response="", status="failed",
+            duration_ms=round((time.monotonic() - started) * 1000),
+            error=str(e),
+        )
         logger.error(f"Generate endpoint error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+    metadata = dict(result.get("metadata") or {})
+    if request.effort:
+        metadata["requested_effort"] = request.effort
+    archive.finish_run(
+        conversation_id=conversation_id, run_id=run_id,
+        response=result["content"], status="completed",
+        duration_ms=round((time.monotonic() - started) * 1000),
+        metadata=metadata, tool_results=result.get("tool_results"),
+        policy_decision=result.get("policy_decision"),
+    )
+    return GenerateResponse(
+        response=result["content"], conversation_id=conversation_id,
+        run_id=run_id, metadata=metadata,
+        tool_results=result.get("tool_results"),
+        policy_decision=result.get("policy_decision"),
+        validation_errors=result.get("validation_errors"),
+    )
+
+
+@app.post("/archive/actions")
+async def archive_local_action(request: ArchiveActionRequest):
+    conversation_id = archive.record_local_action(
+        conversation_id=str(request.conversation_id) if request.conversation_id else None, prompt=request.prompt,
+        response=request.response, error=request.error,
+        tool_results=request.tool_results, duration_ms=request.duration_ms,
+    )
+    return {"conversation_id": conversation_id}
+
+
+@app.get("/archive/conversations")
+async def list_archived_conversations(search: str = "", limit: int = 50, offset: int = 0):
+    return archive.list_conversations(search=search, limit=limit, offset=offset)
+
+
+@app.get("/archive/conversations/{conversation_id}")
+async def get_archived_conversation(conversation_id: str):
+    result = archive.get_conversation(conversation_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return result
+
+
+@app.get("/archive/export.json")
+async def export_archive_json():
+    import json
+    payload = json.dumps(archive.export_json(), ensure_ascii=False, indent=2)
+    return Response(payload, media_type="application/json", headers={"Content-Disposition": "attachment; filename=dirigent-archive.json"})
+
+
+@app.post("/archive/import")
+async def import_archive_json(payload: Dict[str, Any]):
+    try:
+        return archive.import_json(payload)
+    except (ValueError, TypeError, KeyError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/archive/conversations/{conversation_id}/export.md")
+async def export_conversation_markdown(conversation_id: str):
+    markdown = archive.export_markdown(conversation_id)
+    if markdown is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return Response(markdown, media_type="text/markdown", headers={"Content-Disposition": f"attachment; filename=dirigent-{conversation_id}.md"})
 
 
 @app.post("/tools/filesystem/read", response_model=ReadFileResponse)

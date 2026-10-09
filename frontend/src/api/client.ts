@@ -1,5 +1,5 @@
 import { getApiBase } from "../config";
-import type { GenerateResponse } from "../types";
+import type { GenerateResponse, PolicyDecision, ToolCallResult } from "../types";
 
 let apiBase = getApiBase();
 
@@ -158,6 +158,8 @@ export async function generate(params: {
   provider?: "lmstudio" | "chatgpt";
   model: string;
   prompt: string;
+  conversation_id?: string | null;
+  effort?: string | null;
   temperature?: number;
   max_tokens?: number;
 }): Promise<GenerateResponse> {
@@ -166,6 +168,85 @@ export async function generate(params: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
   });
+}
+
+export interface ArchiveSummary {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  run_count: number;
+  last_provider: string | null;
+  last_model: string | null;
+  last_effort: string | null;
+}
+
+export interface ArchivedMessage {
+  id: string;
+  run_id: string | null;
+  role: "user" | "assistant";
+  content: string;
+  created_at: string;
+  provider: string | null;
+  model: string | null;
+  effort: string | null;
+  error: string | null;
+  metadata: Record<string, unknown>;
+}
+
+export interface ArchivedConversation {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  messages: ArchivedMessage[];
+  runs: Array<{
+    id: string;
+    tool_results: ToolCallResult[];
+    policy_decision: PolicyDecision | null;
+  }>;
+}
+
+export async function fetchArchiveSummaries(search = "", offset = 0): Promise<ArchiveSummary[]> {
+  return request<ArchiveSummary[]>(`/archive/conversations?search=${encodeURIComponent(search)}&offset=${offset}`);
+}
+
+export async function fetchArchivedConversation(id: string): Promise<ArchivedConversation> {
+  return request<ArchivedConversation>(`/archive/conversations/${encodeURIComponent(id)}`);
+}
+
+export async function importArchive(payload: unknown): Promise<{conversations: number; messages: number; runs: number}> {
+  return request("/archive/import", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function archiveLocalAction(params: {
+  conversation_id: string | null;
+  prompt: string;
+  response: string;
+  error?: string;
+  duration_ms: number;
+  tool_results?: unknown[];
+}): Promise<{conversation_id: string}> {
+  return request("/archive/actions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+}
+
+export async function downloadArchive(path: string, filename: string): Promise<void> {
+  const response = await fetch(`${apiBase}${path}`);
+  if (!response.ok) throw new Error(`Export failed (${response.status})`);
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 export async function readFile(filePath: string): Promise<{

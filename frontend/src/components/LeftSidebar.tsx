@@ -28,6 +28,8 @@ interface LeftSidebarProps {
 
   onOpenSettings: () => void;
 
+  onOpenArchive: () => void;
+
   onOpenLmStudioPanel: () => void;
 
   isBusy: boolean;
@@ -77,6 +79,8 @@ export function LeftSidebar({
   onOpenRepository,
 
   onOpenSettings,
+
+  onOpenArchive,
 
   onOpenLmStudioPanel,
 
@@ -390,6 +394,20 @@ export function LeftSidebar({
           >
 
             Clear conversation
+
+          </button>
+
+          <button
+
+            className="btn-secondary btn-block"
+
+            onClick={onOpenArchive}
+
+            type="button"
+
+          >
+
+            Conversation archive
 
           </button>
 

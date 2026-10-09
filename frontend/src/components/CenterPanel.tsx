@@ -82,7 +82,7 @@ export function CenterPanel({
 
 
 
-  if (!repoLoaded) {
+  if (!repoLoaded && messages.length === 0) {
 
     return (
 
@@ -168,7 +168,7 @@ export function CenterPanel({
 
         onSend={onSend}
 
-        disabled={isBusy || !selectedModel}
+        disabled={isBusy || !selectedModel || !repoLoaded}
 
       />
 
@@ -177,4 +177,3 @@ export function CenterPanel({
   );
 
 }
-
