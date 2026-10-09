@@ -149,12 +149,13 @@ export async function deleteProviderCredential(
   await request<unknown>(`/auth/providers/${provider}`, { method: "DELETE" });
 }
 
-export async function fetchModels(): Promise<string[]> {
-  const data = await request<{ models: string[] }>("/models");
+export async function fetchModels(provider = "lmstudio"): Promise<string[]> {
+  const data = await request<{ models: string[] }>(`/models?provider=${encodeURIComponent(provider)}`);
   return data.models;
 }
 
 export async function generate(params: {
+  provider?: "lmstudio" | "chatgpt";
   model: string;
   prompt: string;
   temperature?: number;

@@ -106,6 +106,13 @@ class ChatGPTAuthService:
         profiles = self._read_json(self._profiles_path, [])
         return profiles if isinstance(profiles, list) else []
 
+    def active_access_token(self) -> str:
+        """Return an OAuth token only to backend provider code."""
+        for profile in self._profiles():
+            if PLAN_SCOPE in profile.get("scopes", []) and profile.get("access_token"):
+                return str(profile["access_token"])
+        raise OpenAIAuthError("Connect a ChatGPT account with plan usage enabled first.")
+
     def status(self) -> dict[str, Any]:
         with self._lock:
             pending = self._pending

@@ -13,6 +13,7 @@ from backend.paths import is_development
 from backend.openai_auth import OpenAIAuthError, chatgpt_auth
 from backend.provider_credentials import ProviderCredentialError, provider_credentials
 from backend.providers.lmstudio import LMStudioProvider
+from backend.providers.chatgpt import ChatGPTProvider
 from backend.executor.engine import ExecutionEngine
 from backend.tools.registry import ToolRegistry, register_tool
 from backend.tools.filesystem import ReadFileTool, WriteFileTool
@@ -52,11 +53,19 @@ tool_registry.register(GitPushTool())
 registered_tool_names = list(tool_registry.list_names())
 logger.info(f"Registered tools: {registered_tool_names}")
 
-# Initialize provider with registered tools for parsing
-provider = LMStudioProvider(registered_tools=registered_tool_names)
+# Keep provider instances isolated while sharing the existing tool/policy registry.
+providers = {
+    "lmstudio": LMStudioProvider(registered_tools=registered_tool_names),
+    "chatgpt": ChatGPTProvider(registered_tools=registered_tool_names),
+}
+engines = {name: ExecutionEngine(provider=item, tool_registry=tool_registry) for name, item in providers.items()}
+engine = engines["lmstudio"]
 
-# Initialize execution engine with tool registry
-engine = ExecutionEngine(provider=provider, tool_registry=tool_registry)
+
+def _engine_for(provider_name: str) -> ExecutionEngine:
+    if provider_name not in engines:
+        raise HTTPException(status_code=400, detail=f"Unsupported provider: {provider_name}")
+    return engines[provider_name]
 
 
 # Request/Response models
@@ -131,6 +140,7 @@ class ProviderCredentialStatus(BaseModel):
 
 
 class GenerateRequest(BaseModel):
+    provider: str = "lmstudio"
     model: str
     prompt: str
     temperature: Optional[float] = 0.7
@@ -326,9 +336,9 @@ async def test_lmstudio_connection():
 
 
 @app.get("/models", response_model=ModelsResponse)
-async def list_models():
-    """List available LM Studio models."""
-    models = engine.list_models()
+async def list_models(provider: str = "lmstudio"):
+    """List models available to the selected provider connection."""
+    models = _engine_for(provider).list_models()
     return ModelsResponse(models=models)
 
 
@@ -380,7 +390,7 @@ async def delete_provider_credential(provider: str):
 async def generate(request: GenerateRequest):
     """Generate text using a model."""
     try:
-        result = engine.execute(
+        result = _engine_for(request.provider).execute(
             prompt=request.prompt,
             model=request.model,
             temperature=request.temperature,

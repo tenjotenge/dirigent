@@ -57,6 +57,7 @@ function App() {
   const [currentView, setCurrentView] = useState<AppView>("main");
 
   const [models, setModels] = useState<string[]>([]);
+  const [selectedProvider, setSelectedProvider] = useState<"lmstudio" | "chatgpt">("lmstudio");
   const [selectedModel, setSelectedModel] = useState(loadSelectedModel);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
@@ -112,7 +113,7 @@ function App() {
     setIsRefreshingModels(true);
     const start = performance.now();
     try {
-      const modelList = await fetchModels();
+      const modelList = await fetchModels(selectedProvider);
       setModels(modelList);
 
       if (modelList.length === 0) {
@@ -132,7 +133,7 @@ function App() {
       });
 
       addLog("success", `Loaded ${modelList.length} model(s)`, {
-        provider: "lmstudio",
+        provider: selectedProvider,
         success: true,
         durationMs: Math.round(performance.now() - start),
       });
@@ -148,7 +149,7 @@ function App() {
     } finally {
       setIsRefreshingModels(false);
     }
-  }, [addLog]);
+  }, [addLog, selectedProvider]);
 
   const openRepository = useCallback(
     async (path?: string) => {
@@ -293,6 +294,12 @@ function App() {
     saveSelectedModel(model);
   };
 
+  const handleProviderChange = (provider: "lmstudio" | "chatgpt") => {
+    setSelectedProvider(provider);
+    setSelectedModel("");
+    setModels([]);
+  };
+
   const handlePreferencesChange = (prefs: UserPreferences) => {
     setPreferences(prefs);
     savePreferences(prefs);
@@ -409,7 +416,7 @@ function App() {
         setWorkflowStatus("generating_long");
       }, 30000);
 
-      const data = await generate({ model: selectedModel, prompt: userMessage });
+      const data = await generate({ provider: selectedProvider, model: selectedModel, prompt: userMessage });
       
       clearTimeout(longGenerationTimeout);
       const providerDuration = Math.round(performance.now() - start);
@@ -686,6 +693,8 @@ function App() {
     <div className="app">
       <LeftSidebar
         status={backendStatus}
+        selectedProvider={selectedProvider}
+        onProviderChange={handleProviderChange}
         models={models}
         selectedModel={selectedModel}
         onModelChange={handleModelChange}

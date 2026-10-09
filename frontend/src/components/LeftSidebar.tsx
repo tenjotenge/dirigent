@@ -10,6 +10,10 @@ interface LeftSidebarProps {
 
   selectedModel: string;
 
+  selectedProvider: "lmstudio" | "chatgpt";
+
+  onProviderChange: (provider: "lmstudio" | "chatgpt") => void;
+
   onModelChange: (model: string) => void;
 
   onRefreshModels: () => void;
@@ -56,6 +60,10 @@ export function LeftSidebar({
 
   selectedModel,
 
+  selectedProvider,
+
+  onProviderChange,
+
   onModelChange,
 
   onRefreshModels,
@@ -93,6 +101,22 @@ export function LeftSidebar({
       </div>
 
 
+
+      <div className="sidebar-section">
+
+        <h3 className="section-title">Provider</h3>
+
+        <select
+          className="model-select"
+          value={selectedProvider}
+          onChange={(event) => onProviderChange(event.target.value as "lmstudio" | "chatgpt")}
+          disabled={isBusy}
+        >
+          <option value="lmstudio">LM Studio</option>
+          <option value="chatgpt">ChatGPT plan</option>
+        </select>
+
+      </div>
 
       <div className="sidebar-section">
 
@@ -392,4 +416,3 @@ export function LeftSidebar({
   );
 
 }
-
