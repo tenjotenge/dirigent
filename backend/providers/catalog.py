@@ -14,6 +14,8 @@ PROVIDERS: tuple[dict[str, Any], ...] = (
      "generation_route": True, "note": "Existing account-connected generation route."},
     {"id": "claude", "label": "Claude API", "kind": "direct_model",
      "generation_route": True, "note": "Anthropic API key; distinct from a Claude subscription."},
+    {"id": "perplexity", "label": "Perplexity API", "kind": "direct_model",
+     "generation_route": True, "note": "Agent API model routing with provider tools disabled; requires an API key."},
     {"id": "cursor", "label": "Cursor Cloud Agents", "kind": "external_agent",
      "generation_route": False, "note": "Session API needs separate run, artifact, and approval handling."},
     {"id": "devin", "label": "Devin", "kind": "external_agent",
@@ -30,6 +32,7 @@ def provider_capabilities() -> list[dict[str, Any]]:
         "lmstudio": True,
         "chatgpt": chatgpt.get("status") == "connected",
         "claude": credentials["claude"],
+        "perplexity": credentials["perplexity"],
         "cursor": credentials["cursor"],
         "devin": credentials["devin"],
         "openclaw": bool(os.environ.get("OPENCLAW_GATEWAY_URL") and

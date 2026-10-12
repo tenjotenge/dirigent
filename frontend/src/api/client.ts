@@ -71,7 +71,7 @@ export interface ChatGPTAuthResponse {
 }
 
 export interface ProviderCredentialStatus {
-  id: "claude" | "cursor" | "devin";
+  id: "claude" | "perplexity" | "cursor" | "devin";
   label: string;
   credential_label: string;
   env_var: string;

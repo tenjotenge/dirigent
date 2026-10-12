@@ -19,6 +19,7 @@ from backend.provider_credentials import ProviderCredentialError, provider_crede
 from backend.providers.lmstudio import LMStudioProvider
 from backend.providers.chatgpt import ChatGPTProvider
 from backend.providers.claude import ClaudeProvider
+from backend.providers.perplexity import PerplexityProvider
 from backend.providers.catalog import provider_capabilities
 from backend.executor.engine import ExecutionEngine
 from backend.tools.registry import ToolRegistry, register_tool
@@ -69,6 +70,7 @@ providers = {
     "lmstudio": LMStudioProvider(registered_tools=registered_tool_names),
     "chatgpt": ChatGPTProvider(registered_tools=registered_tool_names),
     "claude": ClaudeProvider(registered_tools=registered_tool_names),
+    "perplexity": PerplexityProvider(registered_tools=registered_tool_names),
 }
 engines = {name: ExecutionEngine(provider=item, tool_registry=tool_registry) for name, item in providers.items()}
 engine = engines["lmstudio"]

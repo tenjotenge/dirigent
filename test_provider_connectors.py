@@ -10,6 +10,7 @@ from unittest.mock import patch
 from backend.archive import ConversationArchive
 from backend.provider_credentials import ProviderCredentialStore
 from backend.providers.claude import ClaudeProvider
+from backend.providers.perplexity import PerplexityProvider
 
 
 class FakeResponse:
@@ -80,9 +81,58 @@ class ConnectorTests(unittest.TestCase):
         catalog = importlib.import_module("backend.providers.catalog")
         capabilities = {item["id"]: item for item in catalog.provider_capabilities()}
         self.assertTrue(capabilities["claude"]["generation_route"])
+        self.assertTrue(capabilities["perplexity"]["generation_route"])
         for service in ("cursor", "devin", "openclaw"):
             self.assertFalse(capabilities[service]["generation_route"])
             self.assertNotIn(service, api.engines)
+
+    def test_perplexity_models_generation_and_archive_metadata(self):
+        api = importlib.import_module("backend.app")
+        perplexity_module = importlib.import_module("backend.providers.perplexity")
+        with tempfile.TemporaryDirectory() as directory:
+            store = ProviderCredentialStore()
+            store._directory = Path(directory) / "providers"
+            store.save("perplexity", "test-secret")
+            archived = ConversationArchive(Path(directory) / "archive.sqlite3")
+            model_response = FakeResponse({"data": [{"id": "provider/model-a"}, {"other": "ignored"}]})
+            message_response = FakeResponse({
+                "id": "resp_test", "status": "completed", "model": "provider/actual-model",
+                "output": [{"type": "message", "role": "assistant", "content": [
+                    {"type": "output_text", "text": "Hello from Perplexity"}]}],
+                "usage": {"input_tokens": 7, "output_tokens": 4,
+                          "cost": {"currency": "USD", "total_cost": 0.01}},
+                "reasoning": {"effort": "medium"},
+            })
+            with patch.object(perplexity_module, "provider_credentials", store), \
+                    patch.object(perplexity_module.requests, "get", return_value=model_response) as get, \
+                    patch.object(perplexity_module.requests, "post", return_value=message_response) as post, \
+                    patch.object(api, "archive", archived):
+                self.assertEqual(PerplexityProvider().list_models(), ["provider/model-a"])
+                result = asyncio.run(api.generate(api.GenerateRequest(
+                    provider="perplexity", model="provider/model-a", prompt="Hello",
+                    conversation_id=uuid.uuid4(), effort="medium",
+                )))
+            self.assertEqual(get.call_args.kwargs["headers"]["Authorization"], "Bearer test-secret")
+            payload = post.call_args.kwargs["json"]
+            self.assertEqual(post.call_args.args[0], "https://api.perplexity.ai/v1/agent")
+            self.assertEqual(payload["tools"], [])
+            self.assertFalse(payload["store"])
+            self.assertEqual(payload["reasoning"], {"effort": "medium"})
+            self.assertEqual(payload["max_output_tokens"], 2048)
+            self.assertEqual(result.response, "Hello from Perplexity")
+            saved = archived.get_conversation(result.conversation_id)
+            self.assertEqual(saved["runs"][0]["provider"], "perplexity")
+            self.assertEqual(saved["runs"][0]["model"], "provider/actual-model")
+            self.assertEqual(saved["runs"][0]["effort"], "medium")
+            self.assertEqual(saved["runs"][0]["metadata"]["usage"]["cost"]["total_cost"], 0.01)
+
+    def test_perplexity_rejects_incomplete_response(self):
+        perplexity_module = importlib.import_module("backend.providers.perplexity")
+        with patch.object(perplexity_module.provider_credentials, "get_secret", return_value="test-secret"), \
+                patch.object(perplexity_module.requests, "post", return_value=FakeResponse({
+                    "status": "incomplete", "output": []})):
+            with self.assertRaisesRegex(RuntimeError, "incomplete or invalid"):
+                PerplexityProvider().send("Hello", "provider/model-a")
 
 
 if __name__ == "__main__":

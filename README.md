@@ -14,6 +14,7 @@ Providers are models that generate text or decisions. They suggest what should h
 - **LM Studio**: Local model inference
 - **ChatGPT**: Existing account-connected generation route
 - **Claude API**: Direct Messages API route using an Anthropic API key
+- **Perplexity API**: Direct Agent API model route using a Perplexity API key
 - **Cursor, Devin, OpenClaw**: Cataloged as external agents; prompt routing is not
   yet enabled because their tools, sessions, and artifacts need a separate policy boundary
 
@@ -146,6 +147,11 @@ the backend environment. Environment credentials take precedence over locally
 saved credentials. Multi-workspace Anthropic keys can also use
 `ANTHROPIC_WORKSPACE_ID`. Credential presence is not proof of successful API
 access; selecting Claude in the frontend discovers models with the key.
+Perplexity API keys can likewise be saved in Settings or supplied as
+`PERPLEXITY_API_KEY`. Selecting Perplexity discovers Agent API models, and
+completed runs archive the resolved model and token/cost usage. This direct
+route disables Perplexity-hosted tools (including web search) so all local
+actions remain governed by Dirigent's existing tool and policy pipeline.
 Cursor and Devin API credentials can be stored for later session adapters, but
 they are not selectable as ordinary `/generate` providers. OpenClaw can be
 marked configured with `OPENCLAW_GATEWAY_URL` and `OPENCLAW_GATEWAY_TOKEN`, but
@@ -206,7 +212,7 @@ are no longer exposed.
 
 - **Sidebar**: Repository context, model selector, quick actions, action log
 - **Chat Panel**: Natural language interface for instructions and responses
-- **Model Selector**: Choose from available LM Studio, ChatGPT, or Claude API models
+- **Model Selector**: Choose from available LM Studio, ChatGPT, Claude API, or Perplexity API models
 - **Action Log**: Real-time visibility of all tool invocations (model calls, file operations, git commands)
 
 ## Future Expansion

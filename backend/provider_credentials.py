@@ -22,6 +22,12 @@ PROVIDERS = {
         "env_var": "ANTHROPIC_API_KEY",
         "hint": "Create an API key in Anthropic Console. Claude subscription sessions are not imported.",
     },
+    "perplexity": {
+        "label": "Perplexity",
+        "credential_label": "Perplexity API key",
+        "env_var": "PERPLEXITY_API_KEY",
+        "hint": "Create an API key in the Perplexity API Portal. A Perplexity subscription is not an API credential.",
+    },
     "cursor": {
         "label": "Cursor",
         "credential_label": "Cursor user API key",

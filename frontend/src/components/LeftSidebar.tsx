@@ -119,6 +119,7 @@ export function LeftSidebar({
           <option value="lmstudio">LM Studio</option>
           <option value="chatgpt">ChatGPT plan</option>
           <option value="claude">Claude API</option>
+          <option value="perplexity">Perplexity API</option>
         </select>
 
       </div>
