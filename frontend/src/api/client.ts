@@ -1,5 +1,5 @@
 import { getApiBase } from "../config";
-import type { GenerateResponse, PolicyDecision, ToolCallResult } from "../types";
+import type { GenerateResponse, GenerationProviderId, PolicyDecision, ToolCallResult } from "../types";
 
 let apiBase = getApiBase();
 
@@ -77,6 +77,21 @@ export interface ProviderCredentialStatus {
   env_var: string;
   hint: string;
   connected: boolean;
+  source: "local" | "environment" | null;
+  local_stored: boolean;
+}
+
+export interface ProviderCapability {
+  id: string;
+  label: string;
+  kind: "direct_model" | "external_agent";
+  generation_route: boolean;
+  configured: boolean;
+  note: string;
+}
+
+export async function fetchProviderCapabilities(): Promise<ProviderCapability[]> {
+  return request<ProviderCapability[]>("/providers/capabilities");
 }
 
 export async function fetchHealth(): Promise<HealthResponse> {
@@ -155,7 +170,7 @@ export async function fetchModels(provider = "lmstudio"): Promise<string[]> {
 }
 
 export async function generate(params: {
-  provider?: "lmstudio" | "chatgpt";
+  provider?: GenerationProviderId;
   model: string;
   prompt: string;
   conversation_id?: string | null;

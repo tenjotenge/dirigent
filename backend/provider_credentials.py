@@ -76,11 +76,29 @@ class ProviderCredentialStore:
     def delete(self, provider: str) -> None:
         self._path(provider).unlink(missing_ok=True)
 
+    def get_secret(self, provider: str) -> str | None:
+        """Read a credential only inside the backend; environment takes precedence."""
+        path = self._path(provider)
+        env_value = os.environ.get(PROVIDERS[provider]["env_var"], "").strip()
+        if env_value:
+            return env_value
+        if not path.is_file():
+            return None
+        try:
+            secret = json.loads(path.read_text(encoding="utf-8"))["secret"]
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            raise ProviderCredentialError(f"Stored {provider} credential is unreadable") from exc
+        return secret if isinstance(secret, str) and secret.strip() else None
+
     def status(self) -> list[dict[str, Any]]:
-        return [
-            {"id": key, **metadata, "connected": self._path(key).is_file()}
-            for key, metadata in PROVIDERS.items()
-        ]
+        result = []
+        for key, metadata in PROVIDERS.items():
+            local_stored = self._path(key).is_file()
+            source = ("environment" if os.environ.get(metadata["env_var"], "").strip()
+                      else "local" if local_stored else None)
+            result.append({"id": key, **metadata, "connected": source is not None,
+                           "source": source, "local_stored": local_stored})
+        return result
 
 
 provider_credentials = ProviderCredentialStore()

@@ -1,4 +1,4 @@
-import type { BackendStatus } from "../types";
+import type { BackendStatus, GenerationProviderId } from "../types";
 
 
 
@@ -10,9 +10,9 @@ interface LeftSidebarProps {
 
   selectedModel: string;
 
-  selectedProvider: "lmstudio" | "chatgpt";
+  selectedProvider: GenerationProviderId;
 
-  onProviderChange: (provider: "lmstudio" | "chatgpt") => void;
+  onProviderChange: (provider: GenerationProviderId) => void;
 
   onModelChange: (model: string) => void;
 
@@ -113,11 +113,12 @@ export function LeftSidebar({
         <select
           className="model-select"
           value={selectedProvider}
-          onChange={(event) => onProviderChange(event.target.value as "lmstudio" | "chatgpt")}
+          onChange={(event) => onProviderChange(event.target.value as GenerationProviderId)}
           disabled={isBusy}
         >
           <option value="lmstudio">LM Studio</option>
           <option value="chatgpt">ChatGPT plan</option>
+          <option value="claude">Claude API</option>
         </select>
 
       </div>

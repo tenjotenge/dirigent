@@ -4,12 +4,14 @@ import {
   testLmStudioConnection,
   fetchChatGPTAuthStatus,
   fetchProviderCredentialStatus,
+  fetchProviderCapabilities,
   saveProviderCredential,
   deleteProviderCredential,
   startChatGPTAuth,
   updateSettings,
   type ChatGPTAuthResponse,
   type ProviderCredentialStatus,
+  type ProviderCapability,
   type SettingsResponse,
 } from "../api/client";
 import type { UserPreferences } from "../services/storage";
@@ -47,12 +49,14 @@ export function SettingsView({
   const [chatgptAuth, setChatgptAuth] = useState<ChatGPTAuthResponse | null>(null);
   const [isConnectingChatGPT, setIsConnectingChatGPT] = useState(false);
   const [providerCredentials, setProviderCredentials] = useState<ProviderCredentialStatus[]>([]);
+  const [providerCapabilities, setProviderCapabilities] = useState<ProviderCapability[]>([]);
   const [providerSecrets, setProviderSecrets] = useState<Record<string, string>>({});
   const [providerResult, setProviderResult] = useState<string | null>(null);
 
   useEffect(() => {
     fetchChatGPTAuthStatus().then(setChatgptAuth).catch(() => undefined);
     fetchProviderCredentialStatus().then(setProviderCredentials).catch(() => undefined);
+    fetchProviderCapabilities().then(setProviderCapabilities).catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -124,7 +128,7 @@ export function SettingsView({
   const handleDisconnectProvider = async (provider: ProviderCredentialStatus) => {
     try {
       await deleteProviderCredential(provider.id);
-      setProviderCredentials((current) => current.map((item) => item.id === provider.id ? { ...item, connected: false } : item));
+      setProviderCredentials(await fetchProviderCredentialStatus());
       setProviderResult(`${provider.label} credential removed locally.`);
     } catch (error) {
       setProviderResult(error instanceof Error ? error.message : String(error));
@@ -225,6 +229,7 @@ export function SettingsView({
               <div className="confirm-value">
                 <strong>{provider.label}</strong>
                 <p className="settings-hint">{provider.hint}</p>
+                {provider.connected && <p className="settings-hint">Credential configured via {provider.source === "environment" ? "environment variable" : "local storage"}; API access has not been verified.</p>}
                 <input
                   className="settings-input"
                   type="password"
@@ -237,9 +242,9 @@ export function SettingsView({
                   <button className="btn-secondary" onClick={() => handleSaveProvider(provider)} type="button">
                     {provider.connected ? "Replace" : "Save credential"}
                   </button>
-                  {provider.connected && (
+                  {provider.local_stored && (
                     <button className="btn-secondary" onClick={() => handleDisconnectProvider(provider)} type="button">
-                      Disconnect
+                      Remove local credential
                     </button>
                   )}
                 </div>
@@ -247,6 +252,16 @@ export function SettingsView({
             </div>
           ))}
           {providerResult && <p className="settings-result">{providerResult}</p>}
+        </section>
+
+        <section className="settings-section">
+          <h3>API integration paths</h3>
+          <p className="settings-hint">Direct model APIs can use Dirigent's current tool policy. External agents require separate session and artifact controls before prompt routing is enabled.</p>
+          {providerCapabilities.map((provider) => (
+            <p className="settings-hint" key={provider.id}>
+              <strong>{provider.label}</strong> · {provider.kind === "direct_model" ? "direct model" : "external agent"} · {provider.generation_route ? "generation route ready" : "routing pending"} · {provider.configured ? "credential/configuration present" : "not configured"}. {provider.note}
+            </p>
+          ))}
         </section>
 
         <section className="settings-section">

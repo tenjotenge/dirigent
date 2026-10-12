@@ -11,8 +11,11 @@ Dirigent separates intelligence from action through two key components:
 ### Providers (Intelligence Layer)
 Providers are models that generate text or decisions. They suggest what should happen but never directly perform actions.
 
-- **LM Studio** (currently implemented): Local model inference
-- Future: ChatGPT, Claude, Codex, Devin
+- **LM Studio**: Local model inference
+- **ChatGPT**: Existing account-connected generation route
+- **Claude API**: Direct Messages API route using an Anthropic API key
+- **Cursor, Devin, OpenClaw**: Cataloged as external agents; prompt routing is not
+  yet enabled because their tools, sessions, and artifacts need a separate policy boundary
 
 ### Tools (Action Layer)
 Tools are deterministic operations on your machine. They perform the actual actions suggested by providers.
@@ -136,6 +139,18 @@ Backend settings can be configured via environment variables or a `.env` file:
 
 ### Generation
 - `POST /generate` - Generate text using a selected model
+- `GET /providers/capabilities` - List direct-model versus external-agent integration paths
+
+Claude API keys can be saved in Settings or supplied as `ANTHROPIC_API_KEY` in
+the backend environment. Environment credentials take precedence over locally
+saved credentials. Multi-workspace Anthropic keys can also use
+`ANTHROPIC_WORKSPACE_ID`. Credential presence is not proof of successful API
+access; selecting Claude in the frontend discovers models with the key.
+Cursor and Devin API credentials can be stored for later session adapters, but
+they are not selectable as ordinary `/generate` providers. OpenClaw can be
+marked configured with `OPENCLAW_GATEWAY_URL` and `OPENCLAW_GATEWAY_TOKEN`, but
+its gateway route remains disabled until external tool actions can be surfaced
+and governed explicitly.
 
 ### Conversation archive
 
@@ -191,14 +206,15 @@ are no longer exposed.
 
 - **Sidebar**: Repository context, model selector, quick actions, action log
 - **Chat Panel**: Natural language interface for instructions and responses
-- **Model Selector**: Choose from available LM Studio models
+- **Model Selector**: Choose from available LM Studio, ChatGPT, or Claude API models
 - **Action Log**: Real-time visibility of all tool invocations (model calls, file operations, git commands)
 
 ## Future Expansion
 
 The architecture is designed for future additions:
 
-- **Additional Providers**: ChatGPT, Claude, Codex, Devin
+- **External agent adapters**: Cursor, Devin, OpenClaw session and artifact workflows
+- **Additional direct models**: Further supported inference APIs
 - **Streaming**: WebSocket support for real-time responses
 - **Orchestration**: Multi-step workflows and autonomous agents
 - **Background Tasks**: Async job execution

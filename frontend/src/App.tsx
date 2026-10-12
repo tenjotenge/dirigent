@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import {
   executeConfirmedTool,
@@ -37,6 +37,7 @@ import type {
   AppView,
   BackendStatus,
   ChatMessage,
+  GenerationProviderId,
   PendingAction,
   PolicyDecision,
   StartupPhase,
@@ -60,7 +61,8 @@ function App() {
   const [currentView, setCurrentView] = useState<AppView>("main");
 
   const [models, setModels] = useState<string[]>([]);
-  const [selectedProvider, setSelectedProvider] = useState<"lmstudio" | "chatgpt">("lmstudio");
+  const modelRequestId = useRef(0);
+  const [selectedProvider, setSelectedProvider] = useState<GenerationProviderId>("lmstudio");
   const [selectedModel, setSelectedModel] = useState(loadSelectedModel);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -114,15 +116,17 @@ function App() {
   }, [backendStatus.backendManaged]);
 
   const loadModels = useCallback(async () => {
+    const requestId = ++modelRequestId.current;
     setIsRefreshingModels(true);
     const start = performance.now();
     try {
       const modelList = await fetchModels(selectedProvider);
+      if (requestId !== modelRequestId.current) return modelList;
       setModels(modelList);
 
       if (modelList.length === 0) {
-        addLog("error", "No models returned from LM Studio", {
-          provider: "lmstudio",
+        addLog("error", `No models returned from ${selectedProvider}`, {
+          provider: selectedProvider,
           success: false,
           durationMs: Math.round(performance.now() - start),
         });
@@ -143,15 +147,16 @@ function App() {
       });
       return modelList;
     } catch (error) {
+      if (requestId !== modelRequestId.current) return [];
       addLog("error", "Failed to load models", {
-        provider: "lmstudio",
+        provider: selectedProvider,
         details: error instanceof Error ? error.message : String(error),
         success: false,
         durationMs: Math.round(performance.now() - start),
       });
       return [];
     } finally {
-      setIsRefreshingModels(false);
+      if (requestId === modelRequestId.current) setIsRefreshingModels(false);
     }
   }, [addLog, selectedProvider]);
 
@@ -302,7 +307,8 @@ function App() {
     saveSelectedModel(model);
   };
 
-  const handleProviderChange = (provider: "lmstudio" | "chatgpt") => {
+  const handleProviderChange = (provider: GenerationProviderId) => {
+    modelRequestId.current += 1;
     setSelectedProvider(provider);
     setSelectedModel("");
     setModels([]);

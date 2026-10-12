@@ -7,6 +7,8 @@ export type WorkflowStatus =
   | "completed"
   | "generating_long";  // Long-running generation in progress
 
+export type GenerationProviderId = "lmstudio" | "chatgpt" | "claude";
+
 export type ExecutionEventType =
   | "provider_request"
   | "provider_response"

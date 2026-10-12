@@ -18,6 +18,8 @@ from backend.openai_auth import OpenAIAuthError, chatgpt_auth
 from backend.provider_credentials import ProviderCredentialError, provider_credentials
 from backend.providers.lmstudio import LMStudioProvider
 from backend.providers.chatgpt import ChatGPTProvider
+from backend.providers.claude import ClaudeProvider
+from backend.providers.catalog import provider_capabilities
 from backend.executor.engine import ExecutionEngine
 from backend.tools.registry import ToolRegistry, register_tool
 from backend.tools.filesystem import ReadFileTool, WriteFileTool
@@ -66,6 +68,7 @@ logger.info(f"Registered tools: {registered_tool_names}")
 providers = {
     "lmstudio": LMStudioProvider(registered_tools=registered_tool_names),
     "chatgpt": ChatGPTProvider(registered_tools=registered_tool_names),
+    "claude": ClaudeProvider(registered_tools=registered_tool_names),
 }
 engines = {name: ExecutionEngine(provider=item, tool_registry=tool_registry) for name, item in providers.items()}
 engine = engines["lmstudio"]
@@ -146,6 +149,17 @@ class ProviderCredentialStatus(BaseModel):
     env_var: str
     hint: str
     connected: bool
+    source: Optional[str] = None
+    local_stored: bool = False
+
+
+class ProviderCapability(BaseModel):
+    id: str
+    label: str
+    kind: str
+    generation_route: bool
+    configured: bool
+    note: str
 
 
 class GenerateRequest(BaseModel):
@@ -369,6 +383,12 @@ async def list_models(provider: str = "lmstudio"):
     return ModelsResponse(models=models)
 
 
+@app.get("/providers/capabilities", response_model=List[ProviderCapability])
+async def list_provider_capabilities():
+    """Expose supported integration modes without claiming stored keys are verified."""
+    return [ProviderCapability(**item) for item in provider_capabilities()]
+
+
 @app.get("/auth/chatgpt", response_model=ChatGPTAuthResponse)
 async def get_chatgpt_auth_status():
     """Return safe local ChatGPT connection state; never returns tokens."""
@@ -429,6 +449,7 @@ async def generate(request: GenerateRequest):
         result = selected_engine.execute(
             prompt=request.prompt,
             model=request.model,
+            effort=request.effort,
             temperature=request.temperature,
             max_tokens=request.max_tokens,
         )
