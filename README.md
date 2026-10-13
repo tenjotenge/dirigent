@@ -2,6 +2,9 @@
 
 A local-first "workspace controller" for software development.
 
+For the project vision, implementation status, architecture, and next work,
+see the [project docs](docs/README.md).
+
 Dirigent provides a single place where you can sit in front of a repository and use natural language to control your development workflow. The system intelligently decides whether operations require text editing, Git operations, or model inference.
 
 ## Core Architecture
