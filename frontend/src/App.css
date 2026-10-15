@@ -61,6 +61,20 @@ pre {
   overflow: hidden;
 }
 
+.prompt-attachments { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.prompt-attachments button, .prompt-attachments span {
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--bg-elevated); color: var(--text-secondary);
+  padding: 3px 7px; font-size: 12px;
+}
+.prompt-attachments button { cursor: pointer; }
+.prompt-attach-button {
+  display: inline-block; color: var(--text-secondary); font-size: 12px;
+  cursor: pointer; border: 0; background: transparent; text-align: left;
+}
+.prompt-attach-button:disabled { cursor: not-allowed; opacity: 0.5; }
+.prompt-attachment-error { color: var(--error); font-size: 12px; }
+
 /* ── Left Sidebar ── */
 
 .left-sidebar {

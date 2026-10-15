@@ -8,12 +8,13 @@ from uuid import UUID
 
 from fastapi import FastAPI, Header, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from backend.config import settings
 from backend.paths import is_development
 from backend.archive import archive
 from backend.archive_parquet import MAX_FILE_BYTES, export_encrypted_parquet, import_encrypted_parquet
+from backend.prompt_files import compose_prompt, validate_text_files
 from backend.openai_auth import OpenAIAuthError, chatgpt_auth
 from backend.provider_credentials import ProviderCredentialError, provider_credentials
 from backend.providers.lmstudio import LMStudioProvider
@@ -172,6 +173,7 @@ class GenerateRequest(BaseModel):
     effort: Optional[str] = None
     temperature: Optional[float] = 0.7
     max_tokens: Optional[int] = 2048
+    attachments: List[Dict[str, str]] = Field(default_factory=list)
 
 
 class GenerateResponse(BaseModel):
@@ -439,17 +441,24 @@ async def delete_provider_credential(provider: str):
 async def generate(request: GenerateRequest):
     """Generate text using a model."""
     selected_engine = _engine_for(request.provider)
+    try:
+        attachments = validate_text_files(request.attachments)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not request.prompt.strip() and not attachments:
+        raise HTTPException(status_code=400, detail="Enter a prompt or attach a text file")
     conversation_id, run_id = archive.begin_run(
         conversation_id=str(request.conversation_id) if request.conversation_id else None,
         prompt=request.prompt,
         provider=request.provider,
         model=request.model,
         effort=None,
+        input_metadata={"attachments": attachments} if attachments else None,
     )
     started = time.monotonic()
     try:
         result = selected_engine.execute(
-            prompt=request.prompt,
+            prompt=compose_prompt(request.prompt, attachments),
             model=request.model,
             effort=request.effort,
             temperature=request.temperature,

@@ -1,6 +1,6 @@
 # Current state
 
-Reviewed 2026-10-14 against the tracked code. “Implemented” below means the
+Reviewed 2026-10-15 against the tracked code. “Implemented” below means the
 route and offline tests exist, not that a paid/live provider account was
 verified on this machine.
 
@@ -15,15 +15,20 @@ verified on this machine.
 | Cursor / Devin | Credential storage and capability catalog | No session, prompt, or artifact adapter yet |
 | OpenClaw | Gateway configuration detection and capability catalog | No enabled gateway execution route |
 | Conversation archive | Local SQLite, search/reopen, provider/model/effort metadata, encrypted `.dpa` export/import | No live sync, retention policy, or remote-session ingestion |
-| Files | Local read/write tools and markdown rewrite endpoint | No general attachment upload to providers or produced-file download flow |
+| Files | Local read/write tools, markdown rewrite, and bounded UTF-8 text attachments in direct-model prompts | No provider-native binary upload or produced-file download flow |
 
-The current UI selects a provider and model and sends text prompts through
-`/generate`. It can resume a Dirigent archive conversation by ID. Provider
-models are fetched through `/models?provider=...`; the capability catalog is
-available at `/providers/capabilities`. The archive records actual provider
-metadata when adapters return it; effort may remain unknown if a provider does
-not report it. The main chat input is text-only. The Archive screen's file
-picker is for `.dpa` imports, not prompt attachments.
+The current UI selects a provider and model and sends text prompts and up to
+four small UTF-8 text files through `/generate`. File contents are inlined in
+the model prompt and stored in the local archive's message metadata; they can
+be downloaded from an opened conversation. They are
+not uploaded with a provider-native file API. Files are limited to 32 KiB each
+and 64 KiB combined to control accidental token overload. It can resume a
+Dirigent archive conversation by ID. Provider models are fetched through
+`/models?provider=...`; the capability catalog is available at
+`/providers/capabilities`. The archive records actual provider metadata when
+adapters return it; effort may remain unknown if a provider does not report
+it. The Archive screen's file picker is for `.dpa` imports, separate from the
+chat composer attachment picker.
 
 Current offline verification commands from the repository root:
 

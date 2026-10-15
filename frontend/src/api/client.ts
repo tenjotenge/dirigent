@@ -1,5 +1,5 @@
 import { getApiBase } from "../config";
-import type { GenerateResponse, GenerationProviderId, PolicyDecision, ToolCallResult } from "../types";
+import type { GenerateResponse, GenerationProviderId, PolicyDecision, PromptAttachment, ToolCallResult } from "../types";
 
 let apiBase = getApiBase();
 
@@ -177,6 +177,7 @@ export async function generate(params: {
   effort?: string | null;
   temperature?: number;
   max_tokens?: number;
+  attachments?: PromptAttachment[];
 }): Promise<GenerateResponse> {
   return request<GenerateResponse>("/generate", {
     method: "POST",

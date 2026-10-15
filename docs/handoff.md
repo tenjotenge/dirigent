@@ -15,7 +15,7 @@ Useful entry points:
 - UI flow and API types: `frontend/src/App.tsx`, `frontend/src/api/client.ts`
 - Launchers: `run_dirigent.ps1`, `run_dirigent.bat`, `linux-v1/`
 - Existing tests: `test_archive*.py`, `test_provider_connectors.py`,
-  `linux-v1/tests/test_launcher.sh`
+  `test_prompt_files.py`, `linux-v1/tests/test_launcher.sh`
 
 Before implementing a connector, determine whether it is a direct-model API
 or an external agent, what authentication the service officially supports,
@@ -28,6 +28,7 @@ For a scoped change: check `git status`, read the relevant interface and
 tests, update the code and this documentation together, run offline tests and
 the frontend build as appropriate, then report which live-provider/OS paths
 remain unverified. Do not place real credentials or conversation exports in
-Git. The immediate product gap is provider-neutral prompt-file and output-file
-handling, followed by honest external-agent session routing; see
+Git. Small UTF-8 prompt attachments are now supported, but provider-native
+binary input and output-file retrieval remain product gaps, followed by honest
+external-agent session routing; see
 [roadmap](roadmap.md).

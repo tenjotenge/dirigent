@@ -11,6 +11,14 @@ interface ChatMessageProps {
 
 export function ChatMessage({ message }: ChatMessageProps) {
   const isUser = message.role === "user";
+  const downloadAttachment = (name: string, content: string) => {
+    const url = URL.createObjectURL(new Blob([content], { type: "text/plain;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = name;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
 
   return (
     <div className={`chat-message ${message.role}`}>
@@ -30,6 +38,15 @@ export function ChatMessage({ message }: ChatMessageProps) {
       ) : (
         <div className="chat-message-content markdown-body">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+        </div>
+      )}
+
+      {isUser && message.attachments && message.attachments.length > 0 && (
+        <div className="prompt-attachments" aria-label="Attached text files">
+          {message.attachments.map((file) => <button key={file.name} type="button"
+            title={`Download ${file.name}`} onClick={() => downloadAttachment(file.name, file.content)}>
+            {file.name} ↓
+          </button>)}
         </div>
       )}
 

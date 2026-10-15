@@ -3,7 +3,7 @@
 These are the maintained handoff notes for Dirigent. They follow the useful
 purpose / architecture / current-state / next-work pattern used by neighboring
 projects, but describe this repository rather than copying their assumptions.
-Last reviewed against `main`: 2026-10-14.
+Last reviewed against `main`: 2026-10-15.
 
 Read in this order when joining the project:
 

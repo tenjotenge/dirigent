@@ -40,6 +40,7 @@ import type {
   GenerationProviderId,
   PendingAction,
   PolicyDecision,
+  PromptAttachment,
   StartupPhase,
   ToolCallResult,
   WorkflowStatus,
@@ -67,6 +68,7 @@ function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [chatInput, setChatInput] = useState("");
+  const [attachments, setAttachments] = useState<PromptAttachment[]>([]);
   const [workflowStatus, setWorkflowStatus] = useState<WorkflowStatus>("idle");
   const [isRefreshingModels, setIsRefreshingModels] = useState(false);
   const [isOpeningRepo, setIsOpeningRepo] = useState(false);
@@ -379,9 +381,10 @@ function App() {
   };
 
   const handleGenerate = async () => {
-    if (!chatInput.trim() || !selectedModel || !backendStatus.repoLoaded) return;
+    if ((!chatInput.trim() && attachments.length === 0) || !selectedModel || !backendStatus.repoLoaded) return;
 
     const userMessage = chatInput.trim();
+    const sentAttachments = attachments;
     const activeConversationId = conversationId ?? crypto.randomUUID();
     setConversationId(activeConversationId);
     setMessages((prev) => [
@@ -390,12 +393,14 @@ function App() {
         id: nextMessageId(),
         role: "user",
         content: userMessage,
+        attachments: sentAttachments,
         timestamp: new Date(),
         provider: selectedProvider,
         model: selectedModel,
       },
     ]);
     setChatInput("");
+    setAttachments([]);
 
     const start = performance.now();
     setWorkflowStatus("sending");
@@ -433,7 +438,7 @@ function App() {
     try {
       setWorkflowStatus("waiting_provider");
 
-      const data = await generate({ provider: selectedProvider, model: selectedModel, prompt: userMessage, conversation_id: activeConversationId });
+      const data = await generate({ provider: selectedProvider, model: selectedModel, prompt: userMessage, attachments: sentAttachments, conversation_id: activeConversationId });
       setConversationId(data.conversation_id);
       
       const providerDuration = Math.round(performance.now() - start);
@@ -583,6 +588,7 @@ function App() {
 
   const handleClearConversation = () => {
     setMessages([]);
+    setAttachments([]);
     setConversationId(null);
     addLog("info", "Conversation cleared");
   };
@@ -591,12 +597,17 @@ function App() {
     const saved = await fetchArchivedConversation(id);
     const runs = new Map(saved.runs.map((run) => [run.id, run]));
     setConversationId(saved.id);
+    setAttachments([]);
     setMessages(saved.messages.map((message) => {
       const run = message.run_id ? runs.get(message.run_id) : undefined;
       return {
         id: message.id,
         role: message.role,
         content: message.content,
+        attachments: message.role === "user" && Array.isArray(message.metadata?.attachments)
+          ? message.metadata.attachments.filter((file): file is PromptAttachment =>
+              typeof file === "object" && file !== null && typeof file.name === "string" && typeof file.content === "string")
+          : undefined,
         timestamp: new Date(message.created_at),
         provider: message.provider ?? undefined,
         model: message.model ?? undefined,
@@ -802,6 +813,8 @@ function App() {
         chatInput={chatInput}
         onChatInputChange={setChatInput}
         onSend={handleGenerate}
+        attachments={attachments}
+        onAttachmentsChange={setAttachments}
         isBusy={isBusy}
         workflowStatus={workflowStatus}
         selectedModel={selectedModel}

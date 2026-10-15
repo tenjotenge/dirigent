@@ -6,7 +6,7 @@ import { ChatInput } from "./ChatInput";
 
 import { WelcomeScreen } from "./WelcomeScreen";
 
-import type { ChatMessage as ChatMessageType, WorkflowStatus } from "../types";
+import type { ChatMessage as ChatMessageType, PromptAttachment, WorkflowStatus } from "../types";
 
 import { workflowStatusLabel } from "../utils/format";
 
@@ -21,6 +21,10 @@ interface CenterPanelProps {
   onChatInputChange: (value: string) => void;
 
   onSend: () => void;
+
+  attachments: PromptAttachment[];
+
+  onAttachmentsChange: (attachments: PromptAttachment[]) => void;
 
   isBusy: boolean;
 
@@ -51,6 +55,10 @@ export function CenterPanel({
   onChatInputChange,
 
   onSend,
+
+  attachments,
+
+  onAttachmentsChange,
 
   isBusy,
 
@@ -167,6 +175,10 @@ export function CenterPanel({
         onChange={onChatInputChange}
 
         onSend={onSend}
+
+        attachments={attachments}
+
+        onAttachmentsChange={onAttachmentsChange}
 
         disabled={isBusy || !selectedModel || !repoLoaded}
 

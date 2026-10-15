@@ -39,6 +39,12 @@ serializes portable Parquet and wraps it in passphrase-derived AES-GCM
 encryption for `.dpa` export/import. Export/import is for consolidation, not a
 live cross-machine synchronization service.
 
+`backend/prompt_files.py` validates small UTF-8 text attachments and includes
+their contents in the selected direct provider's prompt. The original file
+content is stored in user-message metadata, preserved by `.dpa` transfer, and
+downloadable when reopening a conversation. This is text inclusion, not a
+provider-native upload or a generated-file retrieval path.
+
 ## Credentials and trust boundaries
 
 ChatGPT uses the local OAuth flow in `backend/openai_auth.py`. Claude and

@@ -155,6 +155,13 @@ Perplexity API keys can likewise be saved in Settings or supplied as
 completed runs archive the resolved model and token/cost usage. This direct
 route disables Perplexity-hosted tools (including web search) so all local
 actions remain governed by Dirigent's existing tool and policy pipeline.
+The chat composer can attach up to four UTF-8 text files (32 KiB each, 64 KiB
+combined). Their contents are included as reference material in the selected
+direct model's prompt and retained in the local conversation archive, including
+encrypted `.dpa` exports. This is not a provider-native binary file upload;
+the selected provider receives the text, and large or non-text files are not
+supported yet. Review attached content before sending; both the provider and
+Dirigent's local archive will receive a copy.
 Cursor and Devin API credentials can be stored for later session adapters, but
 they are not selectable as ordinary `/generate` providers. OpenClaw can be
 marked configured with `OPENCLAW_GATEWAY_URL` and `OPENCLAW_GATEWAY_TOKEN`, but

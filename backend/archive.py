@@ -85,7 +85,8 @@ class ConversationArchive:
             """)
 
     def begin_run(self, *, conversation_id: str | None, prompt: str, provider: str,
-                  model: str, effort: str | None) -> tuple[str, str]:
+                  model: str, effort: str | None,
+                  input_metadata: dict[str, Any] | None = None) -> tuple[str, str]:
         conversation_id = conversation_id or str(uuid.uuid4())
         self._check_uuid(conversation_id)
         run_id = str(uuid.uuid4())
@@ -102,8 +103,9 @@ class ConversationArchive:
                 (run_id, conversation_id, provider, model, effort, timestamp),
             )
             connection.execute(
-                "INSERT INTO messages VALUES (?, ?, ?, 'user', ?, ?, ?, ?, ?, NULL, '{}')",
-                (str(uuid.uuid4()), conversation_id, run_id, prompt, timestamp, provider, model, effort),
+                "INSERT INTO messages VALUES (?, ?, ?, 'user', ?, ?, ?, ?, ?, NULL, ?)",
+                (str(uuid.uuid4()), conversation_id, run_id, prompt, timestamp, provider, model,
+                 effort, _json(input_metadata or {})),
             )
         return conversation_id, run_id
 

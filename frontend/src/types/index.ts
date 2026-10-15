@@ -9,6 +9,11 @@ export type WorkflowStatus =
 
 export type GenerationProviderId = "lmstudio" | "chatgpt" | "claude" | "perplexity";
 
+export interface PromptAttachment {
+  name: string;
+  content: string;
+}
+
 export type ExecutionEventType =
   | "provider_request"
   | "provider_response"
@@ -75,6 +80,7 @@ export interface ChatMessage {
   provider?: string;
   model?: string;
   effort?: string | null;
+  attachments?: PromptAttachment[];
 }
 
 export interface PendingAction {

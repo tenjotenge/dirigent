@@ -7,11 +7,12 @@ offers the same API or that all work has been scheduled.
    discovery, requests, error handling, and archive metadata with real
    user-authorized accounts on the supported OSes. Record verified service,
    model, and effort behavior rather than inferring it from test doubles.
-2. **Introduce a provider-neutral attachment and artifact contract.** Define
-   file size/type limits, consent, transport, storage, provenance, failure
-   states, and how imported/exported conversations retain file references.
-   Then add UI upload/download and one provider implementation before
-   generalizing. The present `.dpa` import picker is not this feature.
+2. **Expand attachments into an artifact contract.** Small UTF-8 text files
+   can now be inlined in direct-model prompts and round-trip through encrypted
+   archive exports. Define binary size/type limits, consent, transport,
+   storage, provenance, failure states, and file retrieval next. Then add
+   provider-native upload/download for one service before generalizing. The
+   `.dpa` import picker is only for conversation archive transfer.
 3. **Build an external-agent run abstraction.** Sessions need creation,
    polling/streaming, cancellation, approvals, tool/action visibility, output
    files, and archive linkage. Integrate Cursor, Devin, and OpenClaw only as

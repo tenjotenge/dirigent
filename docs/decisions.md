@@ -12,6 +12,7 @@ requirements change; do not treat them as universal rules for other projects.
 | Export encrypted Parquet in `.dpa` | Parquet supplies a portable structured payload; passphrase-derived AES-GCM, not Parquet's binary encoding, makes exports confidential and tamper-evident. |
 | Distinguish subscription login from API keys | ChatGPT account connection has its own OAuth path. Claude and Perplexity direct routes use their respective API keys; saved credentials are not proof of working access. |
 | Disable Perplexity-hosted tools on its direct route | Its Agent API can invoke search and other provider-side tools. The current adapter deliberately requests none until those actions can be represented honestly in the UI and archive. |
+| Start file routing with bounded UTF-8 text inclusion | This works across the current direct-model adapters without pretending to support provider-native uploads. Small limits curb accidental token overload; original content is kept in message metadata for archive transfer and download. |
 
 Review relevant code and tests before changing a decision. For example, a new
 file-capable provider may require a new response/artifact contract, not simply
