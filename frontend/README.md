@@ -1,7 +1,13 @@
-# Tauri + React + Typescript
+# Dirigent desktop frontend
 
-This template should help get you started developing with Tauri, React and Typescript in Vite.
+The frontend is a React and TypeScript application packaged with Tauri. It communicates with the local FastAPI service in `../backend`.
 
-## Recommended IDE Setup
+For installation, launch instructions, and project status, start with the [root README](../README.md). The backend must be running when using Vite in a browser:
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+Use `npm run tauri dev` for the desktop development build and `npm run build` to type-check and bundle the web assets. The Tauri development prerequisites are linked from the root README.

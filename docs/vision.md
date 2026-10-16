@@ -1,7 +1,7 @@
 # Vision and scope
 
 Dirigent aims to be one local launcher and workspace for communicating with
-multiple AI frontends and agent architectures. The user should be able to
+multiple model providers and external development services. The user should be able to
 choose where a request goes, retain the resulting conversation and artifacts,
 and switch providers without rebuilding their workflow or losing context. This
 reduces dependence on any single intelligence, pricing model, or context/token

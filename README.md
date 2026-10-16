@@ -1,252 +1,129 @@
-# Dirigent
+<div align="center">
+  <img src="frontend/src-tauri/icons/128x128.png" width="80" alt="Dirigent icon">
 
-A local-first "workspace controller" for software development.
+  # Dirigent
 
-For the project vision, implementation status, architecture, and next work,
-see the [project docs](docs/README.md).
+  **A local workspace for model-assisted software development.**
 
-Dirigent provides a single place where you can sit in front of a repository and use natural language to control your development workflow. The system intelligently decides whether operations require text editing, Git operations, or model inference.
+  Work across a repository, inspect each action, and keep conversations in a portable archive.
 
-## Core Architecture
+  [Get started](#get-started) · [Features](#features) · [Architecture](#how-it-works) · [Documentation](docs/README.md)
+</div>
 
-Dirigent separates intelligence from action through two key components:
+---
 
-### Providers (Intelligence Layer)
-Providers are models that generate text or decisions. They suggest what should happen but never directly perform actions.
+Dirigent brings a repository, conversation, provider selection, and execution log into one desktop interface. The application runs a React/Tauri frontend with a local FastAPI service. It supports LM Studio, a ChatGPT account connection, and direct Claude and Perplexity API routes. Local file and Git operations pass through an explicit tool layer; model-suggested writes and Git changes require confirmation.
 
-- **LM Studio**: Local model inference
-- **ChatGPT**: Existing account-connected generation route
-- **Claude API**: Direct Messages API route using an Anthropic API key
-- **Perplexity API**: Direct Agent API model route using a Perplexity API key
-- **Cursor, Devin, OpenClaw**: Cataloged as external agents; prompt routing is not
-  yet enabled because their tools, sessions, and artifacts need a separate policy boundary
+> **Project status:** Dirigent is under active development. The local workflow and provider adapters are implemented, but packaged releases, cross-platform validation, and live verification of every provider route are still in progress. See [current state](docs/current_state.md) for exact coverage.
 
-### Tools (Action Layer)
-Tools are deterministic operations on your machine. They perform the actual actions suggested by providers.
+## Preview
 
-- **Filesystem**: Read and write files
-- **Git**: Status, add, commit, push operations
-- **Text operations**: Rewrite markdown files using providers
+![Dirigent desktop interface with a sample repository and local test model](docs/images/workspace.jpg)
 
-## Design Philosophy
+<sub>Development build shown with a sample repository and a local test model endpoint. No external provider account is shown.</sub>
 
-- **Explicit and inspectable**: Every action is logged and visible
-- **Never silent**: No automatic modifications or pushes without clear tool invocation
-- **Separation of concerns**: Intelligence (models) vs action (tools)
-- **Simple architecture**: Readable code over clever abstractions
-- **Future-ready**: Designed for expansion (WebSockets, multi-step orchestration, background tasks, autonomous workflows)
+<details>
+<summary>Provider settings</summary>
 
-## Project Structure
+![Dirigent provider connection settings in the development build](docs/images/settings.jpg)
 
-```
-dirigent/
-├── backend/
-│   ├── app.py              # FastAPI application with REST endpoints
-│   ├── config.py           # Configuration settings
-│   ├── providers/
-│   │   ├── base.py         # Base provider interface
-│   │   └── lmstudio.py     # LM Studio provider implementation
-│   └── tools/
-│       ├── filesystem.py   # File read/write tools
-│       └── git.py          # Git operation tools
-├── frontend/
-│   ├── src/
-│   │   ├── App.tsx         # Main React component
-│   │   └── App.css         # UI styling
-│   └── src-tauri/          # Tauri desktop app configuration
-├── run_backend.py          # Backend development server script
-└── README.md               # This file
-```
+<sub>Configuration screen with empty credential fields.</sub>
+</details>
 
-## Prerequisites
+## Features
 
-- Python 3.12+
-- Node.js 18+
-- LM Studio running locally (default: `127.0.0.1:1234`)
+| Area | What is available |
+| --- | --- |
+| Workspace | Open a local repository, inspect Git status, read files, and review tool activity in the execution log. |
+| Providers | Choose a local LM Studio model or connect supported hosted routes: ChatGPT, Claude API, and Perplexity API. |
+| Action control | Model-suggested reads and Git status can run directly; writes and Git mutations require confirmation. |
+| Conversation archive | Search and reopen local conversations. Export and import encrypted `.dpa` archives containing Parquet data. |
+| Text attachments | Add up to four UTF-8 files to a prompt, with a 32 KiB per-file and 64 KiB combined limit. |
 
-## Installation
+Provider availability depends on your local service, account, or API credentials. Cursor, Devin, and OpenClaw appear in the capability catalog, but their session and artifact routes are not enabled. [Integration status](docs/current_state.md) distinguishes implemented code from live-tested connections.
 
-### Backend Setup
+## Get started
 
-1. Create a virtual environment:
+### Requirements
+
+- Python 3.12 or newer
+- Node.js 20.19+ or 22.12+
+- Rust and the [Tauri system prerequisites](https://v2.tauri.app/start/prerequisites/) for desktop development
+- LM Studio with a loaded model for the local inference route, or credentials for a supported hosted route
+
+### Install
+
+From the repository root:
+
 ```bash
 python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-```
-
-2. Install backend dependencies:
-```bash
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r backend/requirements.txt
+cd frontend && npm ci
 ```
 
-### Frontend Setup
+### Run
 
-1. Install frontend dependencies:
+On Windows, run `run_dirigent.bat` after installation. It starts or reuses the backend, checks `/health`, and launches the desktop app. `run_dirigent.ps1 -BackendOnly` starts only the backend.
+
+On Linux, use the [development launcher](linux-v1/README.md):
+
 ```bash
-cd frontend
-npm install
+./linux-v1/run_dirigent.sh
 ```
 
-## Running the Application
-
-### Windows one-click launcher
-
-After completing the backend and frontend setup, run `run_dirigent.bat` from
-Explorer or a command prompt. It resolves the project root, validates `.venv`,
-starts (or reuses) the backend, waits for `/health`, writes backend output to
-`logs/backend.log`, and then launches the desktop frontend.
-
-For a backend-only session, use:
-
-```powershell
-.\run_dirigent.ps1 -BackendOnly
-```
-
-### Start the Backend
-
-The backend runs a FastAPI server on `http://127.0.0.1:8000`.
+For a manual development session, run these in separate terminals from the repository root:
 
 ```bash
 python run_backend.py
 ```
-
-Or manually:
-```bash
-cd backend
-python -m uvicorn app:app --reload --host 127.0.0.1 --port 8000
-```
-
-### Start the Frontend
-
-The frontend runs as a Tauri desktop application.
 
 ```bash
 cd frontend
 npm run tauri dev
 ```
 
-### Configuration
+The backend listens on `http://127.0.0.1:8000` by default. Its OpenAPI reference is available at `http://127.0.0.1:8000/docs` while it is running.
 
-Backend settings can be configured via environment variables or a `.env` file:
+## How it works
 
-- `API_HOST`: Backend API host (default: `127.0.0.1`)
-- `API_PORT`: Backend API port (default: `8000`)
-- `LMSTUDIO_HOST`: LM Studio host (default: `127.0.0.1`)
-- `LMSTUDIO_PORT`: LM Studio port (default: `1234`)
-- `REPO_PATH`: Repository path for Git operations (default: `.`)
+```text
+Desktop UI ──► local FastAPI service ──► selected model provider
+    │                    │
+    │                    ├──► action policy ──► filesystem / Git tools
+    │                    └──► local SQLite archive ──► encrypted .dpa transfer
+    └──► visible confirmations and execution log
+```
 
-## API Endpoints
+Provider adapters return text and metadata. A separate execution layer parses proposed tool calls, applies policy, and records the outcome. The archive stores conversations locally and supports passphrase-protected export. This boundary is described in the [architecture](docs/architecture.md) and [tool execution contract](TOOL_EXECUTION_CONTRACT.md).
 
-### Health & Models
-- `GET /health` - Health check and provider availability
-- `GET /models` - List available LM Studio models
+### Data and credentials
 
-### Generation
-- `POST /generate` - Generate text using a selected model
-- `GET /providers/capabilities` - List direct-model versus external-agent integration paths
-
-Claude API keys can be saved in Settings or supplied as `ANTHROPIC_API_KEY` in
-the backend environment. Environment credentials take precedence over locally
-saved credentials. Multi-workspace Anthropic keys can also use
-`ANTHROPIC_WORKSPACE_ID`. Credential presence is not proof of successful API
-access; selecting Claude in the frontend discovers models with the key.
-Perplexity API keys can likewise be saved in Settings or supplied as
-`PERPLEXITY_API_KEY`. Selecting Perplexity discovers Agent API models, and
-completed runs archive the resolved model and token/cost usage. This direct
-route disables Perplexity-hosted tools (including web search) so all local
-actions remain governed by Dirigent's existing tool and policy pipeline.
-The chat composer can attach up to four UTF-8 text files (32 KiB each, 64 KiB
-combined). Their contents are included as reference material in the selected
-direct model's prompt and retained in the local conversation archive, including
-encrypted `.dpa` exports. This is not a provider-native binary file upload;
-the selected provider receives the text, and large or non-text files are not
-supported yet. Review attached content before sending; both the provider and
-Dirigent's local archive will receive a copy.
-Cursor and Devin API credentials can be stored for later session adapters, but
-they are not selectable as ordinary `/generate` providers. OpenClaw can be
-marked configured with `OPENCLAW_GATEWAY_URL` and `OPENCLAW_GATEWAY_TOKEN`, but
-its gateway route remains disabled until external tool actions can be surfaced
-and governed explicitly.
-
-### Conversation archive
-
-Conversations and run metadata are kept in a local SQLite database under the
-platform-specific Dirigent application-data directory. The Archive screen can
-search and reopen conversations, and consolidate archives from other installs.
-Each saved run includes the provider and model; reasoning effort is included
-when the provider reports it.
-
-Portable exports are encrypted `.dpa` files containing Parquet data. Enter a
-passphrase of at least 12 characters and confirm it before export. Import on
-another installation with the same passphrase. Imports merge by stable IDs and
-can be repeated without duplicating records. The passphrase is not stored, so
-losing it makes the export unrecoverable. Do not confuse Parquet's binary format
-with encryption: the `.dpa` wrapper provides the confidentiality and integrity.
-Exports are currently limited to 128 MB. The older plaintext JSON import API
-remains available for migration, but plaintext JSON and Markdown export routes
-are no longer exposed.
-
-### Filesystem Tools
-- `POST /tools/filesystem/read` - Read a file
-- `POST /tools/filesystem/write` - Write content to a file
-
-### Text Operations
-- `POST /tools/text/rewrite-markdown` - Rewrite a markdown file using a model
-
-### Git Tools
-- `POST /tools/git/status` - Get git status
-- `POST /tools/git/add` - Stage files for commit
-- `POST /tools/git/commit` - Create a commit
-- `POST /tools/git/push` - Push commits to remote
-
-## Usage Examples
-
-### Clean up a README
-1. Select a model from the dropdown
-2. Type: "clean up this README to make it clearer"
-3. The system will read the file, use the model to rewrite it, and write the changes
-
-### Check Git status
-1. Click "Git Status" in the Quick Actions panel
-2. The git status appears in the chat panel
-
-### Make a commit and push
-1. Use the chat to instruct: "commit these changes with message 'fix bug' and push"
-2. The system executes the git add, commit, and push operations
-
-### Read a file
-1. Click "Read README.md" in Quick Actions
-2. The file contents appear in the chat panel
-
-## Frontend Features
-
-- **Sidebar**: Repository context, model selector, quick actions, action log
-- **Chat Panel**: Natural language interface for instructions and responses
-- **Model Selector**: Choose from available LM Studio, ChatGPT, Claude API, or Perplexity API models
-- **Action Log**: Real-time visibility of all tool invocations (model calls, file operations, git commands)
-
-## Future Expansion
-
-The architecture is designed for future additions:
-
-- **External agent adapters**: Cursor, Devin, OpenClaw session and artifact workflows
-- **Additional direct models**: Further supported inference APIs
-- **Streaming**: WebSocket support for real-time responses
-- **Orchestration**: Multi-step workflows and autonomous agents
-- **Background Tasks**: Async job execution
-- **More Tools**: Extended filesystem operations, testing, deployment
+- Conversations are stored in a local SQLite database in the platform application-data directory.
+- `.dpa` exports are encrypted with a passphrase; losing it makes an export unrecoverable.
+- API keys can be supplied through environment variables or the local credential store. `ANTHROPIC_API_KEY` and `PERPLEXITY_API_KEY` take precedence over saved credentials.
+- Text attachments are included in the selected provider request and retained in the local archive. Review files before sending them to a hosted provider.
+- A saved credential is not proof of successful API access. Provider model discovery and requests still need a working account and connection.
 
 ## Development
 
-### Backend Development
-- Backend uses FastAPI with auto-reload enabled
-- API documentation available at `http://127.0.0.1:8000/docs`
+Run the offline backend checks and frontend build from the repository root:
 
-### Frontend Development
-- Frontend uses React with TypeScript
-- Tauri handles desktop app packaging
-- Hot reload enabled during development
+```bash
+XDG_CONFIG_HOME=$(mktemp -d) .venv/bin/python -m unittest discover -q
+cd frontend && npm run build
+```
+
+The temporary config directory keeps tests away from a personal archive. The [Linux launcher smoke test](linux-v1/README.md#test) runs separately and briefly uses port 8000.
+
+## Documentation
+
+- [Product scope and boundaries](docs/vision.md)
+- [Current implementation status](docs/current_state.md)
+- [Architecture and trust boundaries](docs/architecture.md)
+- [Roadmap](docs/roadmap.md)
+- [Contributor guide](docs/handoff.md)
 
 ## License
 
-MIT
+Released under the [MIT License](LICENSE).

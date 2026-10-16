@@ -1,4 +1,4 @@
-# Handoff for the next contributor or agent
+# Contributor guide
 
 Start with [vision](vision.md), [current state](current_state.md), and
 [architecture](architecture.md). Then inspect the exact code you will change;

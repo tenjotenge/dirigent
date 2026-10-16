@@ -17,7 +17,7 @@ export function WelcomeScreen({
         <h2>Welcome to Dirigent</h2>
         <p className="welcome-lead">
           Dirigent is a local-first workspace controller for software development.
-          It separates AI intelligence from deterministic actions — every tool call
+          It separates model output from local actions — every tool call
           is logged, policy-checked, and confirmed when needed.
         </p>
 
